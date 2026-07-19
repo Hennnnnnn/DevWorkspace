@@ -22,6 +22,8 @@ jobs:
 
       - name: Build
         env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
           SUFFIX: ${{ matrix.os == 'windows' && '.exe' || '' }}
         run: |
           go build -ldflags "-X github.com/Hennnnnnn/DevWorkspace/internal/client/config.DefaultServerURL=https://devworkspace.onrender.com" -o "devsync${{ env.SUFFIX }}" ./cmd/devsync
