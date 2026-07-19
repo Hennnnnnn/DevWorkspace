@@ -7,6 +7,20 @@ End-to-end encrypted credential store. Push a secret from one device, pull it on
 
 ---
 
+## Autocomplete (Tab)
+
+```powershell
+# One-time setup (auto-done by the installer)
+devsync completion powershell | Out-String | Invoke-Expression
+
+# Or install permanently:
+devsync completion powershell >> $PROFILE
+```
+
+Press Tab to complete commands, flags, vault names, and team names.
+
+---
+
 ## Install
 
 ### Windows (one-liner)
