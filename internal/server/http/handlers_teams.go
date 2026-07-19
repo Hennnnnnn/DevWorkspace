@@ -79,6 +79,25 @@ func (s *Server) handleMembers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
+func (s *Server) handleDeleteTeam(w http.ResponseWriter, r *http.Request) {
+	var req protocol.CreateTeamRequest
+	if err := json.Unmarshal(bodyOf(r), &req); err != nil || req.Name == "" {
+		writeErr(w, http.StatusBadRequest, "team name required")
+		return
+	}
+	ctx := r.Context()
+	if _, err := s.store.GetTeamByName(ctx, req.Name); err != nil {
+		writeErr(w, http.StatusNotFound, "team not found")
+		return
+	}
+	if err := s.store.DeleteTeam(ctx, req.Name); err != nil {
+		writeErr(w, http.StatusInternalServerError, "failed to delete team")
+		return
+	}
+	_ = s.store.Log(ctx, userOf(r).ID, deviceOf(r).ID, "", "delete_team", req.Name)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
 func (s *Server) handleInvite(w http.ResponseWriter, r *http.Request) {
 	var req protocol.InviteRequest
 	if err := json.Unmarshal(bodyOf(r), &req); err != nil || req.Username == "" || req.TeamName == "" {

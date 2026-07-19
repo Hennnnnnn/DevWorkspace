@@ -32,6 +32,26 @@ func newInviteCmd() *cobra.Command {
 	return cmd
 }
 
+func newDeleteTeamCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "delete-team <name>",
+		Short: "Delete a team and all its data (admin)",
+		Long:  "Permanently delete a team, its vaults, files, and memberships.\n\nArguments:\n  <name>  Team name to delete",
+		Args:  expectArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			cl, _, err := authedClient()
+			if err != nil {
+				return err
+			}
+			if err := cl.Post("/admin/delete-team", protocol.CreateTeamRequest{Name: args[0]}, nil); err != nil {
+				return err
+			}
+			fmt.Printf("team %q deleted\n", args[0])
+			return nil
+		},
+	}
+}
+
 func newCreateTeamCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "create-team <name>",

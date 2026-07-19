@@ -51,6 +51,7 @@ func (s *Server) Handler() http.Handler {
 
 	// Admin only.
 	mux.HandleFunc("POST /admin/create-team", s.adminAuthed(s.handleCreateTeam))
+	mux.HandleFunc("POST /admin/delete-team", s.adminAuthed(s.handleDeleteTeam))
 	mux.HandleFunc("POST /admin/approve", s.adminAuthed(s.handleApprove))
 	mux.HandleFunc("POST /admin/create-vault", s.adminAuthed(s.handleCreateVault))
 	mux.HandleFunc("POST /admin/grant", s.adminAuthed(s.handleGrant))

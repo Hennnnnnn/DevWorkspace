@@ -31,6 +31,12 @@ func (s *Store) GetTeamByName(ctx context.Context, name string) (*Team, error) {
 	return &t, nil
 }
 
+// DeleteTeam removes a team by name. CASCADE handles vaults, files, members.
+func (s *Store) DeleteTeam(ctx context.Context, name string) error {
+	_, err := s.Pool.Exec(ctx, `DELETE FROM teams WHERE name=$1`, name)
+	return err
+}
+
 // AddTeamMember inserts (or no-ops) a membership row.
 func (s *Store) AddTeamMember(ctx context.Context, teamID, userID, status string) error {
 	_, err := s.Pool.Exec(ctx,
