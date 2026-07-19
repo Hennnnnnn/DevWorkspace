@@ -4,6 +4,8 @@ package tui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/Hennnnnnn/DevWorkspace/internal/client/actions"
 )
 
 // rootModel drives a lazygit/k9s-style drill-down stack: top menu -> list ->
@@ -19,7 +21,10 @@ func newRootModel() rootModel {
 }
 
 func (m rootModel) Init() tea.Cmd {
-	return nil
+	if actions.IsUnlocked() {
+		return nil
+	}
+	return pushView(newUnlockView())
 }
 
 func (m rootModel) top() tea.Model {
