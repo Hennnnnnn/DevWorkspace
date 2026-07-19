@@ -7,6 +7,10 @@ import (
 	"path/filepath"
 )
 
+// DefaultServerURL is set at build time via ldflags for a zero-config client.
+// Example: go build -ldflags "-X github.com/Hennnnnnn/DevWorkspace/internal/client/config.DefaultServerURL=https://devworkspace.onrender.com"
+var DefaultServerURL string
+
 // Config is the client's persisted state in ~/.devsync/config.json.
 // Private keys live in separate files, never here.
 type Config struct {
@@ -44,7 +48,7 @@ func Load() (*Config, error) {
 	}
 	data, err := os.ReadFile(p)
 	if os.IsNotExist(err) {
-		return &Config{}, nil
+		return &Config{ServerURL: DefaultServerURL}, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("read config: %w", err)
@@ -52,6 +56,9 @@ func Load() (*Config, error) {
 	var c Config
 	if err := json.Unmarshal(data, &c); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
+	}
+	if c.ServerURL == "" {
+		c.ServerURL = DefaultServerURL
 	}
 	return &c, nil
 }

@@ -24,7 +24,7 @@ $Repo = "Hennnnnnn/DevWorkspace"
 
 # --- targets ---
 $BinDir = if ($LocalPath) { Resolve-Path $LocalPath } else { "$HOME\.devsync\bin" }
-$ServerUrl = "http://localhost:8080"
+$ServerUrl = "https://devworkspace.onrender.com"
 
 Write-Host "==> devsync installer" -ForegroundColor Cyan
 
@@ -39,8 +39,9 @@ elseif ($Build) {
     Push-Location $tmp
     try {
         $script:buildOk = $false
-        go build -o "$BinDir\devsync.exe" ./cmd/devsync 2>&1
-        go build -o "$BinDir\devsync-server.exe" ./cmd/devsync-server 2>&1
+        $ldflags = "-X github.com/Hennnnnnn/DevWorkspace/internal/client/config.DefaultServerURL=$ServerUrl"
+        go build -ldflags "$ldflags" -o "$BinDir\devsync.exe" ./cmd/devsync 2>&1
+        go build -ldflags "$ldflags" -o "$BinDir\devsync-server.exe" ./cmd/devsync-server 2>&1
         $script:buildOk = $true
     } finally {
         Pop-Location
@@ -105,7 +106,7 @@ try {
 
 Write-Host ""
 Write-Host "devsync installed!" -ForegroundColor Cyan
-Write-Host "Set your server URL and register:" -ForegroundColor Gray
-Write-Host "  devsync config set server_url $ServerUrl"
+Write-Host "Server URL baked in: $ServerUrl" -ForegroundColor Gray
+Write-Host "Get started:" -ForegroundColor Gray
 Write-Host "  devsync init"
 Write-Host "  devsync register --username <you>"

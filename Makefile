@@ -7,8 +7,13 @@ ifeq ($(OS),Windows_NT)
     BINARY_SUFFIX = .exe
 endif
 
+# Override DEFAULT_SERVER_URL at build time, e.g.:
+#   make build DEFAULT_SERVER_URL=https://devworkspace.onrender.com
+DEFAULT_SERVER_URL ?= http://localhost:8080
+LDFLAGS = -X github.com/Hennnnnnn/DevWorkspace/internal/client/config.DefaultServerURL=$(DEFAULT_SERVER_URL)
+
 build-client:
-	go build -o bin/devsync$(BINARY_SUFFIX) ./cmd/devsync
+	go build -ldflags "$(LDFLAGS)" -o bin/devsync$(BINARY_SUFFIX) ./cmd/devsync
 
 build-server:
 	go build -o bin/devsync-server$(BINARY_SUFFIX) ./cmd/devsync-server

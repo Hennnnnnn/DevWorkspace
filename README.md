@@ -15,13 +15,12 @@ End-to-end encrypted credential store with git/SSH-style access. Push a secret f
 irm https://raw.githubusercontent.com/Hennnnnnn/DevWorkspace/main/scripts/install.ps1 | iex
 ```
 
-Installs `devsync` + `devsync-server` to `~\.devsync\bin` and adds it to your PATH.
+Installs `devsync` + `devsync-server` to `~\.devsync\bin`, adds to PATH, and bakes in the default server URL. Ready to use — no config needed.
 
 ### Go (any OS)
 
 ```sh
-go install github.com/Hennnnnnn/DevWorkspace/cmd/devsync@latest
-go install github.com/Hennnnnnn/DevWorkspace/cmd/devsync-server@latest
+go install -ldflags '-X github.com/Hennnnnnn/DevWorkspace/internal/client/config.DefaultServerURL=https://devworkspace.onrender.com' github.com/Hennnnnnn/DevWorkspace/cmd/devsync@latest
 ```
 
 ### From source
@@ -31,7 +30,7 @@ git clone https://github.com/Hennnnnnn/DevWorkspace.git
 cd DevWorkspace
 .\scripts\install.ps1 -Build      # Windows
 # or
-make build                        # Linux/macOS
+make build DEFAULT_SERVER_URL=https://devworkspace.onrender.com   # Linux/macOS
 ```
 
 ---
@@ -42,7 +41,6 @@ make build                        # Linux/macOS
 cp .env.example .env
 make up
 
-devsync config set server_url http://localhost:8080
 devsync init
 devsync register --username alice
 # on the server host:
@@ -54,6 +52,8 @@ devsync create-vault secrets --team eng
 devsync push .env --vault secrets
 devsync pull .env --vault secrets
 ```
+
+> **Self-host tip:** build with `make build DEFAULT_SERVER_URL=https://your-server.com` and users won't need `config set server_url`.
 
 ---
 
