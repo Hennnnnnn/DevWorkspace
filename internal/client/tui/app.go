@@ -56,6 +56,10 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case pushMsg:
+		if m.width > 0 && m.height > 0 {
+			updated, _ := msg.model.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+			msg.model = updated
+		}
 		m.stack = append(m.stack, msg.model)
 		return m, msg.model.Init()
 
