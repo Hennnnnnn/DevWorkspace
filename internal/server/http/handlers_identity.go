@@ -63,6 +63,13 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	// Existing user adding a device. Requires a valid link signature from one of
 	// their active devices over the new fingerprint.
 	status := "pending"
+	// Admin with no active devices: auto-activate to allow recovery.
+	if existing.IsAdmin {
+		active, _ := s.store.ListActiveDevices(ctx, existing.ID)
+		if len(active) == 0 {
+			status = "active"
+		}
+	}
 	if len(req.LinkSignature) > 0 && req.LinkDeviceFingerprint != "" {
 		signer, signerUser, err := s.store.GetDeviceByFingerprint(ctx, req.LinkDeviceFingerprint)
 		if err != nil || signerUser.ID != existing.ID || signer.Status != "active" {
