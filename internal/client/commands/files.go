@@ -25,6 +25,9 @@ func newPushCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			name := filepath.Base(args[0])
+
+			sp := startSpinner("reading " + name)
 			plain, err := os.ReadFile(args[0])
 			if err != nil {
 				return err
@@ -32,15 +35,21 @@ func newPushCmd() *cobra.Command {
 			if len(plain) > maxPlaintext {
 				return fmt.Errorf("file exceeds 1MB limit (%d bytes)", len(plain))
 			}
+			sp.done("read " + name)
+
+			sp = startSpinner("fetching vault key")
 			vk, keyVersion, err := fetchVaultKey(cl, vault)
 			if err != nil {
 				return err
 			}
+			sp.done("got vault key")
+
+			sp = startSpinner(fmt.Sprintf("encrypting %s (%.1f KB)", name, float64(len(plain))/1024))
 			ct, err := crypto.EncryptBlob(vk, plain)
 			if err != nil {
 				return err
 			}
-			name := filepath.Base(args[0])
+			sp.done("encrypted")
 
 			// Determine base version (0 if new) for optimistic lock.
 			base, err := currentVersion(cl, vault, name)
@@ -49,11 +58,12 @@ func newPushCmd() *cobra.Command {
 			}
 			req := protocol.PushRequest{Vault: vault, File: protocol.FilePush{
 				Path: name, KeyVersion: keyVersion, Ciphertext: ct, BaseVersion: base}}
+			sp = startSpinner(fmt.Sprintf("uploading %s (%.1f KB)", name, float64(len(ct))/1024))
 			var resp protocol.PushResponse
 			if err := cl.Post("/files/push", req, &resp); err != nil {
 				return err
 			}
-			fmt.Printf("pushed %s -> version %d\n", name, resp.Version)
+			sp.done(fmt.Sprintf("pushed %s -> version %d", name, resp.Version))
 			return nil
 		},
 	}
@@ -102,10 +112,14 @@ func newPullCmd() *cobra.Command {
 				}
 				return nil
 			}
+			sp := startSpinner("fetching vault key")
 			vk, _, err := fetchVaultKey(cl, vault)
 			if err != nil {
 				return err
 			}
+			sp.done("got vault key")
+
+			sp = startSpinner("downloading " + args[0])
 			var pr protocol.PullResponse
 			if err := cl.Get("/files/pull", urlValues("vault", vault, "path", args[0]), &pr); err != nil {
 				return err
@@ -113,6 +127,9 @@ func newPullCmd() *cobra.Command {
 			if pr.Deleted {
 				return fmt.Errorf("%s is deleted (use checkout --version N to restore)", args[0])
 			}
+			sp.done(fmt.Sprintf("downloaded (%.1f KB)", float64(len(pr.Ciphertext))/1024))
+
+			sp = startSpinner("decrypting")
 			plain, err := crypto.DecryptBlob(vk, pr.Ciphertext)
 			if err != nil {
 				return err
@@ -123,7 +140,7 @@ func newPullCmd() *cobra.Command {
 			if err := os.WriteFile(out, plain, 0o600); err != nil {
 				return err
 			}
-			fmt.Printf("pulled %s (v%d) -> %s\n", args[0], pr.Version, out)
+			sp.done(fmt.Sprintf("pulled %s (v%d) -> %s", args[0], pr.Version, out))
 			return nil
 		},
 	}
