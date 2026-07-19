@@ -6,7 +6,7 @@ import "github.com/spf13/cobra"
 func NewRoot() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "devsync",
-		Short:         "devsync — end-to-end encrypted credential store",
+		Short:         "devsync - end-to-end encrypted credential store",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}

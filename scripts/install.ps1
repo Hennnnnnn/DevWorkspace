@@ -76,10 +76,10 @@ if ($userPath -notlike "*$BinDir*") {
 
 # --- 3. verify ---
 try {
-    $v = & devsync --help 2>&1 | Select-Object -First 1
-    Write-Host "   devsync ready: $v" -ForegroundColor Green
+    $null = & devsync --help 2>&1
+    Write-Host "   devsync ready — run 'devsync --help' to see commands" -ForegroundColor Green
 } catch {
-    Write-Host "   installed — start a new terminal, then type 'devsync --help'" -ForegroundColor Yellow
+    Write-Host "   installed - start a new terminal, then type 'devsync --help'" -ForegroundColor Yellow
 }
 
 Write-Host ""
