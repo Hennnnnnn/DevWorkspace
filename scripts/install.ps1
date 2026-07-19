@@ -3,19 +3,13 @@
 .SYNOPSIS
     Install devsync CLI and server binaries.
 .DESCRIPTION
-    Downloads or builds devsync, adds the bin directory to the user PATH.
-    One-liner: irm https://raw.githubusercontent.com/Hennnnnnn/DevWorkspaceSync/main/scripts/install.ps1 | iex
-.PARAMETER Version
-    GitHub release tag to download (default: latest). Ignored when -Build is set.
-.PARAMETER Build
-    Build from source instead of downloading a release. Requires Go.
+    Builds devsync from source, adds the bin directory to the user PATH. Requires Go.
+    One-liner: irm https://raw.githubusercontent.com/Hennnnnnn/DevWorkspace/main/scripts/install.ps1 | iex
 .PARAMETER LocalPath
     Path to a pre-built bin/ directory. Skips download & build.
 #>
 
 param(
-    [string]$Version = "latest",
-    [switch]$Build,
     [string]$LocalPath
 )
 
@@ -32,8 +26,8 @@ Write-Host "==> devsync installer" -ForegroundColor Cyan
 if ($LocalPath) {
     Write-Host "   using pre-built binaries from $LocalPath"
 }
-elseif ($Build) {
-    Write-Host "   building from source (requires Go)" -ForegroundColor Yellow
+else {
+    Write-Host "   building from source" -ForegroundColor Yellow
     $tmp = Join-Path $env:TMP "devsync-build-$(Get-Random)"
     git clone "https://github.com/$Repo.git" $tmp 2>&1 | Out-Null
     Push-Location $tmp
@@ -49,39 +43,6 @@ elseif ($Build) {
     }
     if (-not $script:buildOk) { throw "build failed" }
     Write-Host "   built devsync + devsync-server" -ForegroundColor Green
-}
-else {
-    # download from GitHub releases
-    if ($Version -eq "latest") {
-        $api = "https://api.github.com/repos/$Repo/releases/latest"
-        $release = Invoke-RestMethod $api
-        $tag = $release.tag_name
-    } else {
-        $tag = $Version
-    }
-
-    $arch = if ([Environment]::Is64BitOperatingSystem) { "amd64" } else { "386" }
-    $os = if ($IsWindows -or (-not $IsLinux -and -not $IsMacOs)) { "windows" } else { "linux" }
-    $ext = if ($os -eq "windows") { "zip" } else { "tar.gz" }
-
-    $url = "https://github.com/$Repo/releases/download/$tag/devsync_${os}_${arch}.$ext"
-    Write-Host "   downloading $url"
-
-    $tmp = Join-Path $env:TMP "devsync-$(Get-Random)"
-    New-Item -ItemType Directory -Path $tmp -Force | Out-Null
-    $archive = Join-Path $tmp "archive.$ext"
-
-    Invoke-WebRequest -Uri $url -OutFile $archive
-    if ($ext -eq "zip") {
-        Expand-Archive -Path $archive -DestinationPath $tmp
-    } else {
-        tar -xzf $archive -C $tmp
-    }
-    Move-Item "$tmp\devsync.exe" "$BinDir\devsync.exe" -Force -ErrorAction SilentlyContinue
-    Move-Item "$tmp\devsync" "$BinDir\devsync" -Force -ErrorAction SilentlyContinue
-    Move-Item "$tmp\devsync-server.exe" "$BinDir\devsync-server.exe" -Force -ErrorAction SilentlyContinue
-    Move-Item "$tmp\devsync-server" "$BinDir\devsync-server" -Force -ErrorAction SilentlyContinue
-    Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
 }
 
 # --- 2. add to PATH ---
