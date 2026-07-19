@@ -19,7 +19,11 @@ func Load() (*Config, error) {
 	}
 	addr := os.Getenv("DEVSYNC_LISTEN_ADDR")
 	if addr == "" {
-		addr = ":8080"
+		if p := os.Getenv("PORT"); p != "" {
+			addr = ":" + p
+		} else {
+			addr = ":8080"
+		}
 	}
 	return &Config{DatabaseURL: dsn, ListenAddr: addr}, nil
 }
