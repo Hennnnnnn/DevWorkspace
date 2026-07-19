@@ -31,7 +31,7 @@ jobs:
         run: |
           ${{ matrix.os == 'windows' && '7z a -tzip' || 'tar -czf' }} "devsync_${{ matrix.os }}_${{ matrix.arch }}.${{ matrix.os == 'windows' && 'zip' || 'tar.gz' }}" devsync${{ matrix.os == 'windows' && '.exe' || '' }} devsync-server${{ matrix.os == 'windows' && '.exe' || '' }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: devsync_${{ matrix.os }}_${{ matrix.arch }}
           path: devsync_${{ matrix.os }}_${{ matrix.arch }}.${{ matrix.os == 'windows' && 'zip' || 'tar.gz' }}
