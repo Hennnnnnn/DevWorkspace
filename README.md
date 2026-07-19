@@ -3,7 +3,7 @@
 [![Go Version](https://img.shields.io/badge/go-1.26-blue)](go.mod)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Hennnnnnn/DevWorkspace)](https://goreportcard.com/report/github.com/Hennnnnnn/DevWorkspace)
 
-End-to-end encrypted credential store with git/SSH-style access. Push a secret from one device, pull it on another — the server is zero-knowledge.
+End-to-end encrypted credential store. Push a secret from one device, pull it on another. The server sees only ciphertext — zero-knowledge.
 
 ---
 
@@ -15,7 +15,7 @@ End-to-end encrypted credential store with git/SSH-style access. Push a secret f
 irm https://raw.githubusercontent.com/Hennnnnnn/DevWorkspace/main/scripts/install.ps1 | iex
 ```
 
-Installs `devsync` + `devsync-server` to `~\.devsync\bin`, adds to PATH, and bakes in the default server URL. Ready to use — no config needed.
+Installs `devsync` to `~\.devsync\bin`, adds to PATH, bakes in the default server URL. Ready to go.
 
 ### Go (any OS)
 
@@ -23,101 +23,130 @@ Installs `devsync` + `devsync-server` to `~\.devsync\bin`, adds to PATH, and bak
 go install -ldflags '-X github.com/Hennnnnnn/DevWorkspace/internal/client/config.DefaultServerURL=https://devworkspace.onrender.com' github.com/Hennnnnnn/DevWorkspace/cmd/devsync@latest
 ```
 
-### From source
-
-```sh
-git clone https://github.com/Hennnnnnn/DevWorkspace.git
-cd DevWorkspace
-.\scripts\install.ps1 -Build      # Windows
-# or
-make build DEFAULT_SERVER_URL=https://devworkspace.onrender.com   # Linux/macOS
-```
-
 ---
 
-## Quickstart
+## Quickstart: solo user
 
-```sh
-cp .env.example .env
-make up
+Set up your first vault and push a secret in 5 commands:
 
+```powershell
+# 1. Generate a device keypair
 devsync init
-devsync register --username alice
-devsync bootstrap-admin   # first-user, sudo-like
 
+# 2. Register your device with the server
+devsync register --username alice
+
+# 3. Promote yourself to admin (solo user, first-time only)
+devsync bootstrap-admin
+
+# 4. Unlock your key into the agent
 devsync unlock
+
+# 5. Create a team + vault + push your first secret
 devsync create-team eng
 devsync create-vault secrets --team eng
 devsync push .env --vault secrets
+```
+
+Run `devsync pull .env --vault secrets` to decrypt and download.
+
+---
+
+## Team workflow: share a secret
+
+### Admin (you)
+
+```powershell
+# 1. Create a team (once)
+devsync create-team eng
+
+# 2. Create a vault (once)
+devsync create-vault secrets --team eng
+
+# 3. Push your secret
+devsync push .env --vault secrets
+
+# 4. Approve + grant access to a teammate
+devsync approve budi --fingerprint SHA256:xxxx   # fp from teammate's devsync init
+devsync grant budi --vault secrets
+```
+
+### Teammate (budi)
+
+```powershell
+devsync init
+devsync register --username budi
+# ^ send your fingerprint to the admin
+
+devsync unlock
 devsync pull .env --vault secrets
 ```
 
-> **Self-host tip:** build with `make build DEFAULT_SERVER_URL=https://your-server.com` and users won't need `config set server_url`.
+Budi's device gets the vault key sealed to it during `grant`. He can now decrypt the file.
+
+---
+
+## Commands
+
+| Category | Command | What it does |
+|----------|---------|-------------|
+| Setup | `init` | Generate device keypair (shows fingerprint) |
+| | `register` | Register your public key with server |
+| | `whoami` | Show your identity + status |
+| | `unlock` / `lock` | Unlock key into agent for a period |
+| | `bootstrap-admin` | Promote yourself to admin (first user) |
+| | `config set` / `get` | View or change client config |
+| Teams | `create-team` | Create a team (admin) |
+| | `join` | Request to join a team |
+| | `teams` | List your teams |
+| | `members` | List team members |
+| Vaults | `create-vault` | Create a vault (admin) |
+| | `grant` | Give vault access to someone (admin) |
+| | `revoke` | Remove vault access + rotate key (admin) |
+| | `approve` | Activate a pending user (admin) |
+| Files | `push` | Encrypt + upload a file |
+| | `pull` | Download + decrypt a file |
+| | `history` | Show file version history |
+| | `checkout` | Restore a specific version |
+| | `rm` | Soft-delete a file |
+| | `audit` | Show vault audit log |
+| Devices | `device list` | List your devices |
+| | `device add` | Authorize a new device |
+| | `device revoke` | Revoke a device |
+| | `devices of <user>` | Show another user's devices (admin) |
+
+Run `devsync <command> --help` for details.
 
 ---
 
 ## Security model
 
 - **Signed requests** — every API call carries an Ed25519 signature over `METHOD\npath\nauth-body-sha256\ntimestamp`. Server verifies against the stored device public key; timestamps outside ±5 minutes are rejected (anti-replay).
-- **Zero-knowledge server** — vault data is encrypted with a symmetric key (X25519 + secretbox) before upload. The server only ever sees ciphertext and sealed key shares. It cannot read secrets.
+- **Zero-knowledge server** — vault data is encrypted with a symmetric key (X25519 + secretbox) before upload. The server only ever stores ciphertext and sealed key shares. It cannot read secrets.
 - **Device-bound keys** — private key encrypted at rest with an Argon2id-derived key. Unlocked into an in-memory agent for a configurable TTL.
 - **Per-vault key sealing** — vault keys are sealed to each device's X25519 box key. Revoking a user rotates the vault key and re-encrypts every file.
 
 ---
 
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| `init` | Generate a device keypair |
-| `register` | Register device public key with server |
-| `whoami` | Show current identity |
-| `unlock` / `lock` | Unlock device key into agent |
-| `config set` / `get` | Client configuration |
-| `create-team` | Create a team |
-| `join` | Request to join a team |
-| `teams` | List teams |
-| `members` | List team members |
-| `approve` | Approve a pending user |
-| `create-vault` | Create a vault |
-| `grant` | Grant vault access |
-| `revoke` | Revoke vault access + rotate key |
-| `push` | Encrypt and upload a file |
-| `pull` | Download and decrypt a file |
-| `history` | Show file version history |
-| `checkout` | Restore a specific version |
-| `rm` | Soft-delete a file |
-| `audit` | Show vault audit log |
-| `device list` / `add` / `revoke` | Manage devices |
-
-Run `devsync <command> --help` for full usage and argument details.
-
----
-
 ## Deployment
 
-### Server
+### Server env vars
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DATABASE_URL` | `postgres://devsync:devsync@db:5432/devsync` | Postgres DSN |
-| `PORT` | `8080` | HTTP listen port |
-| `HMAC_SECRET` | auto-generated | Request signing HMAC key |
+| `DEVSYNC_DATABASE_URL` | — | Postgres DSN |
+| `DEVSYNC_LISTEN_ADDR` | `:8080` | HTTP listen address |
+| `PORT` | (fallback) | Alternative listen port (PaaS convention) |
 
 ```sh
 docker compose up -d
 # or standalone:
-DATABASE_URL=postgres://... ./bin/devsync-server serve
+DEVSYNC_DATABASE_URL=postgres://... devsync-server serve
 ```
 
 ### Client
 
-```sh
-# per-project or system-wide
-devsync config set server_url https://devsync.example.com
-```
-
-State lives in `~/.devsync/`.
+State lives in `~/.devsync/`. No config needed — server URL is baked into the binary.
 
 ---
 
@@ -127,7 +156,7 @@ State lives in `~/.devsync/`.
 cmd/devsync/             CLI entrypoint
 cmd/devsync-server/      Server entrypoint
 internal/
-  client/                Config, keystore, agent, signed API client, Cobra commands
+  client/                Config, keystore, agent, signed API client, commands
   server/                HTTP handlers, auth middleware, Postgres store
   crypto/                E2E primitives (Ed25519, X25519, secretbox, Argon2id)
   protocol/              Wire contract (signing, headers, DTOs)
@@ -142,6 +171,7 @@ internal/
 make build           # -> bin/devsync(.exe), bin/devsync-server(.exe)
 make test            # unit tests (no DB)
 make up              # docker compose: postgres + server
+
 # integration:
 DEVSYNC_TEST_DATABASE_URL=postgres://devsync:devsync@localhost:5433/devsync?sslmode=disable \
   go test ./internal/server/... -run TestFullLifecycle
