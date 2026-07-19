@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -34,24 +35,45 @@ func checkUpdate() {
 		return
 	}
 
-	resp, err := http.Get("https://api.github.com/repos/Hennnnnnn/DevWorkspace/releases/latest")
-	if err != nil {
-		return
-	}
-	defer resp.Body.Close()
+	checkDev := strings.Count(Version, ".") < 2
+	var latest string
 
-	var rel struct{ TagName string `json:"tag_name"` }
-	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil || rel.TagName == "" {
-		return
-	}
+	if checkDev {
+		resp, err := http.Get("https://api.github.com/repos/Hennnnnnn/DevWorkspace/commits/main?per_page=1")
+		if err != nil {
+			return
+		}
+		defer resp.Body.Close()
+		var commit struct{ Sha string `json:"sha"` }
+		if err := json.NewDecoder(resp.Body).Decode(&commit); err != nil || commit.Sha == "" {
+			return
+		}
+		latest = commit.Sha[:7]
 
-	if Version != "dev" && rel.TagName != Version {
-		fmt.Fprintf(os.Stderr, "\n⚠ A new release is available: %s → %s\n", Version, rel.TagName)
-		fmt.Fprintf(os.Stderr, "  Run 'devsync update' to upgrade.\n\n")
+		if !strings.HasPrefix(Version, latest) {
+			fmt.Fprintf(os.Stderr, "\n⚠ New commits on main: %s\n", Version)
+			fmt.Fprintf(os.Stderr, "  Run 'devsync update' (or reinstall) to get the latest.\n\n")
+		}
+	} else {
+		resp, err := http.Get("https://api.github.com/repos/Hennnnnnn/DevWorkspace/releases/latest")
+		if err != nil {
+			return
+		}
+		defer resp.Body.Close()
+		var rel struct{ TagName string `json:"tag_name"` }
+		if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil || rel.TagName == "" {
+			return
+		}
+		latest = rel.TagName
+
+		if Version != "dev" && rel.TagName != Version {
+			fmt.Fprintf(os.Stderr, "\n⚠ A new release is available: %s → %s\n", Version, rel.TagName)
+			fmt.Fprintf(os.Stderr, "  Run 'devsync update' to upgrade.\n\n")
+		}
 	}
 
 	os.MkdirAll(filepath.Dir(updateCheckFile), 0700)
-	data, _ := json.Marshal(updateCache{Latest: rel.TagName, Checked: time.Now()})
+	data, _ := json.Marshal(updateCache{Latest: latest, Checked: time.Now()})
 	os.WriteFile(updateCheckFile, data, 0600)
 }
 
