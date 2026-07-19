@@ -166,7 +166,7 @@ func registerDevice(t *testing.T, base, user string, d *testDevice) {
 
 func (d *testDevice) signReq(req *http.Request, user string, body []byte) {
 	ts := time.Now().Unix()
-	msg := protocol.SigningString(req.Method, req.URL.Path, protocol.BodyHash(body), ts)
+	msg := protocol.SigningString(req.Method, req.URL.RequestURI(), protocol.BodyHash(body), ts)
 	req.Header.Set(protocol.HeaderUser, user)
 	req.Header.Set(protocol.HeaderDevice, d.fp)
 	req.Header.Set(protocol.HeaderTimestamp, strconv.FormatInt(ts, 10))
@@ -228,7 +228,6 @@ func (d *testDevice) get(t *testing.T, base, user, path string, query map[string
 		}
 	}
 	req, _ := http.NewRequest(http.MethodGet, u, nil)
-	// Sign against path only (query not part of signing string).
 	d.signReq(req, user, nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -247,7 +246,7 @@ func (d *testDevice) get(t *testing.T, base, user, path string, query map[string
 func (d *testDevice) getRawTS(t *testing.T, base, user, path string, ts int64) int {
 	t.Helper()
 	req, _ := http.NewRequest(http.MethodGet, base+path, nil)
-	msg := protocol.SigningString(req.Method, req.URL.Path, protocol.BodyHash(nil), ts)
+	msg := protocol.SigningString(req.Method, req.URL.RequestURI(), protocol.BodyHash(nil), ts)
 	req.Header.Set(protocol.HeaderUser, user)
 	req.Header.Set(protocol.HeaderDevice, d.fp)
 	req.Header.Set(protocol.HeaderTimestamp, strconv.FormatInt(ts, 10))
@@ -265,7 +264,7 @@ func (d *testDevice) getRawAs(t *testing.T, base, user, claimFP, path string) in
 	t.Helper()
 	ts := time.Now().Unix()
 	req, _ := http.NewRequest(http.MethodGet, base+path, nil)
-	msg := protocol.SigningString(req.Method, req.URL.Path, protocol.BodyHash(nil), ts)
+	msg := protocol.SigningString(req.Method, req.URL.RequestURI(), protocol.BodyHash(nil), ts)
 	req.Header.Set(protocol.HeaderUser, user)
 	req.Header.Set(protocol.HeaderDevice, claimFP)
 	req.Header.Set(protocol.HeaderTimestamp, strconv.FormatInt(ts, 10))

@@ -25,11 +25,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
 
 	// Open (self-signed by the registering device, not yet trusted).
-	mux.HandleFunc("POST /register", s.handleRegister)
+	mux.HandleFunc("POST /register", rateLimit(s.handleRegister))
 
 	// Bootstrap — one-shot: promotes the first user to admin. Only works when
 	// zero admins exist. Safe to call right after /register.
-	mux.HandleFunc("POST /admin/bootstrap", s.handleBootstrap)
+	mux.HandleFunc("POST /admin/bootstrap", rateLimit(s.handleBootstrap))
 
 	// Authenticated (signature required; pending devices allowed for whoami).
 	mux.HandleFunc("GET /whoami", s.authed(s.handleWhoAmI))
