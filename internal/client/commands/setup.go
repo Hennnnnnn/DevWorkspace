@@ -76,10 +76,9 @@ Flags let you skip prompts if you already know the values.`,
 			}
 			if !isAdmin {
 				fmt.Println("\n── Step 3: Become admin ──")
-				fmt.Println("As the first user, promote yourself to admin (no approval needed).")
-				if err := newBootstrapAdminCmd().RunE(cmd, args); err != nil {
-					return fmt.Errorf("bootstrap-admin: %w", err)
-				}
+				fmt.Println("If you are the FIRST user, run this to become admin:")
+				fmt.Println("  devsync bootstrap-admin")
+				fmt.Println("(Skipping — admin may already exist. Continue with setup anyway.)")
 			} else {
 				fmt.Println("✓ Already admin")
 			}
