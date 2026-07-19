@@ -128,19 +128,28 @@ func newUpdateCmd() *cobra.Command {
 }
 
 func writeAtomic(dst string, src io.Reader, mode os.FileMode) error {
+	// Windows: can't delete/replace a running .exe, but can rename it.
+	old := dst + ".old"
+	os.Remove(old) // ignore error
+	os.Rename(dst, old)
+
 	tmp := dst + ".tmp"
 	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
 	if err != nil {
-		return err
+		return fmt.Errorf("create temp: %w", err)
 	}
 	if _, err := io.Copy(f, src); err != nil {
 		f.Close()
 		os.Remove(tmp)
-		return err
+		return fmt.Errorf("write temp: %w", err)
 	}
 	if err := f.Close(); err != nil {
 		os.Remove(tmp)
-		return err
+		return fmt.Errorf("close temp: %w", err)
 	}
-	return os.Rename(tmp, dst)
+	if err := os.Rename(tmp, dst); err != nil {
+		return fmt.Errorf("replace: %w", err)
+	}
+	os.Remove(old)
+	return nil
 }
