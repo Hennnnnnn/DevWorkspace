@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/Hennnnnnn/DevWorkspace/internal/protocol"
@@ -68,7 +69,7 @@ func (s *Server) handleKeyShares(w http.ResponseWriter, r *http.Request) {
 	}
 	shares, err := s.store.GetKeySharesForDevice(r.Context(), v.ID, deviceOf(r).ID)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "keyshares")
+		writeErr(w, http.StatusInternalServerError, "failed to retrieve key shares")
 		return
 	}
 	out := protocol.KeySharesResponse{}
@@ -89,14 +90,9 @@ func (s *Server) handleGrant(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	// Admin must have access to the vault (holds the key) — enforced by requiring
 	// the admin submit sealed shares (they can only seal if they hold the key).
-	v, err := s.store.GetVaultByName(ctx, req.Vault)
+	v, err := s.resolveVaultForUser(r, req.Vault)
 	if err != nil {
-		writeErr(w, http.StatusNotFound, "vault not found")
-		return
-	}
-	ok, _ := s.store.HasGrant(ctx, v.ID, userOf(r).ID)
-	if !ok {
-		writeErr(w, http.StatusForbidden, "admin lacks vault access")
+		writeErr(w, http.StatusForbidden, err.Error())
 		return
 	}
 	grantee, err := s.store.GetUserByUsername(ctx, req.Username)
@@ -105,7 +101,7 @@ func (s *Server) handleGrant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.Grant(ctx, v.ID, grantee.ID, toStoreShares(req.Shares, v.ID)); err != nil {
-		writeErr(w, http.StatusInternalServerError, "grant")
+		writeErr(w, http.StatusInternalServerError, "failed to grant vault access")
 		return
 	}
 	_ = s.store.Log(ctx, userOf(r).ID, deviceOf(r).ID, v.ID, "grant", req.Username)
@@ -130,13 +126,13 @@ func (s *Server) handleRevoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.RevokeGrant(ctx, v.ID, target.ID); err != nil {
-		writeErr(w, http.StatusInternalServerError, "revoke")
+		writeErr(w, http.StatusInternalServerError, "failed to revoke grant")
 		return
 	}
 	// Rotation: new sealed shares to survivors + re-encrypted files under new key version.
 	if len(req.Shares) > 0 {
 		if err := s.store.AddKeyShares(ctx, toStoreShares(req.Shares, v.ID)); err != nil {
-			writeErr(w, http.StatusInternalServerError, "rotate shares")
+			writeErr(w, http.StatusInternalServerError, "failed to update key shares after rotation")
 			return
 		}
 	}
@@ -157,7 +153,10 @@ func (s *Server) resolveVaultForUser(r *http.Request, vaultName string) (*store.
 	if err != nil {
 		return nil, errForbidden("vault not found")
 	}
-	ok, _ := s.store.HasGrant(r.Context(), v.ID, userOf(r).ID)
+	ok, err := s.store.HasGrant(r.Context(), v.ID, userOf(r).ID)
+	if err != nil {
+		return nil, fmt.Errorf("check grant: %w", err)
+	}
 	if !ok {
 		return nil, errForbidden("no access to vault")
 	}

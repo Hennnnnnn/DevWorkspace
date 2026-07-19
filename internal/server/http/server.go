@@ -101,7 +101,7 @@ func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	n, err := s.store.CountAdmins(ctx)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "count admins")
+		writeErr(w, http.StatusInternalServerError, "failed to check existing admins")
 		return
 	}
 	if n > 0 {
@@ -115,7 +115,7 @@ func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "lookup")
+		writeErr(w, http.StatusInternalServerError, "failed to look up device")
 		return
 	}
 	if user.Username != req.Username {
@@ -124,15 +124,15 @@ func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.store.SetUserStatus(ctx, user.ID, "active"); err != nil {
-		writeErr(w, http.StatusInternalServerError, "activate user")
+		writeErr(w, http.StatusInternalServerError, "failed to activate user")
 		return
 	}
 	if err := s.store.SetDeviceStatus(ctx, dev.ID, "active"); err != nil {
-		writeErr(w, http.StatusInternalServerError, "activate device")
+		writeErr(w, http.StatusInternalServerError, "failed to activate device")
 		return
 	}
 	if err := s.store.SetUserAdmin(ctx, user.ID, true); err != nil {
-		writeErr(w, http.StatusInternalServerError, "set admin")
+		writeErr(w, http.StatusInternalServerError, "failed to promote to admin")
 		return
 	}
 

@@ -48,7 +48,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "lookup")
+		writeErr(w, http.StatusInternalServerError, "failed to look up user")
 		return
 	}
 
@@ -91,7 +91,7 @@ func (s *Server) handleWhoAmI(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListDevices(w http.ResponseWriter, r *http.Request) {
 	devs, err := s.store.ListDevices(r.Context(), userOf(r).ID)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "list devices")
+		writeErr(w, http.StatusInternalServerError, "failed to list devices")
 		return
 	}
 	out := protocol.DeviceList{}
@@ -113,7 +113,7 @@ func (s *Server) handleUserDevices(w http.ResponseWriter, r *http.Request) {
 	}
 	devs, err := s.store.ListActiveDevices(r.Context(), u.ID)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "list devices")
+		writeErr(w, http.StatusInternalServerError, "failed to list devices")
 		return
 	}
 	out := protocol.DeviceList{}
@@ -138,7 +138,7 @@ func (s *Server) handleLinkDevice(w http.ResponseWriter, r *http.Request) {
 	// Ensure the target device belongs to the caller.
 	devs, err := s.store.ListDevices(r.Context(), userOf(r).ID)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "lookup")
+		writeErr(w, http.StatusInternalServerError, "failed to look up devices")
 		return
 	}
 	owns := false
@@ -152,7 +152,7 @@ func (s *Server) handleLinkDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.SetDeviceStatus(r.Context(), req.DeviceID, "revoked"); err != nil {
-		writeErr(w, http.StatusInternalServerError, "revoke")
+		writeErr(w, http.StatusInternalServerError, "failed to revoke device")
 		return
 	}
 	_ = s.store.Log(r.Context(), userOf(r).ID, deviceOf(r).ID, "", "device_revoke", req.DeviceID)

@@ -43,7 +43,10 @@ func newPushCmd() *cobra.Command {
 			name := filepath.Base(args[0])
 
 			// Determine base version (0 if new) for optimistic lock.
-			base := currentVersion(cl, vault, name)
+			base, err := currentVersion(cl, vault, name)
+			if err != nil {
+				return fmt.Errorf("check current version: %w", err)
+			}
 			req := protocol.PushRequest{Vault: vault, File: protocol.FilePush{
 				Path: name, KeyVersion: keyVersion, Ciphertext: ct, BaseVersion: base}}
 			var resp protocol.PushResponse
@@ -60,17 +63,17 @@ func newPushCmd() *cobra.Command {
 }
 
 // currentVersion returns the latest version of a file, or 0 if absent.
-func currentVersion(cl *api.Client, vault, path string) int {
+func currentVersion(cl *api.Client, vault, path string) (int, error) {
 	var files protocol.FileListResponse
 	if err := cl.Get("/files", urlValues("vault", vault), &files); err != nil {
-		return 0
+		return 0, err
 	}
 	for _, f := range files.Files {
 		if f.Path == path {
-			return f.LatestVersion
+			return f.LatestVersion, nil
 		}
 	}
-	return 0
+	return 0, nil
 }
 
 func newPullCmd() *cobra.Command {
@@ -223,7 +226,10 @@ func newRmCmd() *cobra.Command {
 				return err
 			}
 			// Soft delete = push an empty, deleted-flagged version. Server marks it.
-			base := currentVersion(cl, vault, args[0])
+			base, err := currentVersion(cl, vault, args[0])
+			if err != nil {
+				return fmt.Errorf("check current version: %w", err)
+			}
 			if base == 0 {
 				return fmt.Errorf("file %s not found in vault", args[0])
 			}

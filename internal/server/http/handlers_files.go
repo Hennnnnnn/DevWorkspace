@@ -54,7 +54,7 @@ func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	files, err := s.store.ListFiles(r.Context(), v.ID)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "list files")
+		writeErr(w, http.StatusInternalServerError, "failed to list files")
 		return
 	}
 	out := protocol.FileListResponse{}
@@ -86,7 +86,7 @@ func (s *Server) handlePull(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "pull")
+		writeErr(w, http.StatusInternalServerError, "failed to pull file")
 		return
 	}
 	_ = s.store.Log(r.Context(), userOf(r).ID, deviceOf(r).ID, v.ID, "pull", path)
@@ -104,7 +104,7 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
 	versions, err := s.store.History(r.Context(), v.ID, path)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "history")
+		writeErr(w, http.StatusInternalServerError, "failed to retrieve file history")
 		return
 	}
 	out := protocol.HistoryResponse{}
@@ -125,7 +125,7 @@ func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := s.store.Audit(r.Context(), v.ID)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "audit")
+		writeErr(w, http.StatusInternalServerError, "failed to retrieve audit log")
 		return
 	}
 	out := protocol.AuditResponse{}

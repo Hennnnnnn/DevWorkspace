@@ -45,7 +45,7 @@ func (c *Client) doSigned(method, path string, query url.Values, body any, out a
 	if body != nil {
 		b, err := json.Marshal(body)
 		if err != nil {
-			return err
+			return fmt.Errorf("encode request body: %w", err)
 		}
 		bodyBytes = b
 	}
@@ -59,7 +59,7 @@ func (c *Client) doSigned(method, path string, query url.Values, body any, out a
 	}
 	req, err := http.NewRequest(method, u, bytes.NewReader(bodyBytes))
 	if err != nil {
-		return err
+		return fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(protocol.HeaderUser, c.username)
@@ -69,17 +69,24 @@ func (c *Client) doSigned(method, path string, query url.Values, body any, out a
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("connect to server: %w", err)
 	}
 	defer resp.Body.Close()
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read response: %w", err)
+	}
 
 	if resp.StatusCode >= 300 {
 		var e protocol.ErrorResponse
 		if json.Unmarshal(respBody, &e) == nil && e.Error != "" {
 			return fmt.Errorf("server: %s (%d)", e.Error, resp.StatusCode)
 		}
-		return fmt.Errorf("server returned %d: %s", resp.StatusCode, string(respBody))
+		body := string(respBody)
+		if len(body) > 200 {
+			body = body[:200] + "..."
+		}
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode, body)
 	}
 	if out != nil {
 		return json.Unmarshal(respBody, out)
@@ -103,16 +110,23 @@ func PostUnsigned(baseURL, path string, body, out any) error {
 	}
 	resp, err := http.Post(baseURL+path, "application/json", bytes.NewReader(b))
 	if err != nil {
-		return err
+		return fmt.Errorf("connect to server: %w", err)
 	}
 	defer resp.Body.Close()
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read response: %w", err)
+	}
 	if resp.StatusCode >= 300 {
 		var e protocol.ErrorResponse
 		if json.Unmarshal(respBody, &e) == nil && e.Error != "" {
 			return fmt.Errorf("server: %s (%d)", e.Error, resp.StatusCode)
 		}
-		return fmt.Errorf("server returned %d: %s", resp.StatusCode, string(respBody))
+		body := string(respBody)
+		if len(body) > 200 {
+			body = body[:200] + "..."
+		}
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode, body)
 	}
 	if out != nil {
 		return json.Unmarshal(respBody, out)

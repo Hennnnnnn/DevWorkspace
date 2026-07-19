@@ -41,7 +41,11 @@ func newBootstrapAdminCmd() *cobra.Command {
 			}
 
 			fmt.Printf("bootstrapping admin %s on %s ...\n", cfg.Username, cfg.ServerURL)
-			return api.PostUnsigned(cfg.ServerURL, "/admin/bootstrap", req, nil)
+			if err := api.PostUnsigned(cfg.ServerURL, "/admin/bootstrap", req, nil); err != nil {
+				return err
+			}
+			fmt.Printf("admin bootstrap successful — you are now admin\n")
+			return nil
 		},
 	}
 }

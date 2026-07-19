@@ -49,8 +49,8 @@ func (s *Server) handleJoin(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "team not found")
 		return
 	}
-	if err := s.store.AddTeamMember(r.Context(), t.ID, userOf(r).ID, "pending"); err != nil {
-		writeErr(w, http.StatusInternalServerError, "join")
+		if err := s.store.AddTeamMember(r.Context(), t.ID, userOf(r).ID, "pending"); err != nil {
+		writeErr(w, http.StatusInternalServerError, "failed to join team")
 		return
 	}
 	_ = s.store.Log(r.Context(), userOf(r).ID, deviceOf(r).ID, "", "join_team", req.Name)
@@ -67,7 +67,7 @@ func (s *Server) handleMembers(w http.ResponseWriter, r *http.Request) {
 	}
 	members, err := s.store.ListMembers(r.Context(), t.ID, pendingOnly)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "list members")
+		writeErr(w, http.StatusInternalServerError, "failed to list team members")
 		return
 	}
 	out := protocol.MemberList{}
@@ -97,7 +97,7 @@ func (s *Server) handleInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.AddTeamMember(ctx, t.ID, u.ID, "active"); err != nil {
-		writeErr(w, http.StatusInternalServerError, "add member")
+		writeErr(w, http.StatusInternalServerError, "failed to add team member")
 		return
 	}
 	_ = s.store.Log(ctx, userOf(r).ID, deviceOf(r).ID, "", "invite", req.Username+" to "+req.TeamName)
@@ -124,11 +124,11 @@ func (s *Server) handleApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.SetUserStatus(ctx, user.ID, "active"); err != nil {
-		writeErr(w, http.StatusInternalServerError, "activate user")
+		writeErr(w, http.StatusInternalServerError, "failed to activate user")
 		return
 	}
 	if err := s.store.SetDeviceStatus(ctx, device.ID, "active"); err != nil {
-		writeErr(w, http.StatusInternalServerError, "activate device")
+		writeErr(w, http.StatusInternalServerError, "failed to activate device")
 		return
 	}
 	// Activate any pending team memberships for this user.
@@ -143,7 +143,7 @@ func (s *Server) handleApprove(w http.ResponseWriter, r *http.Request) {
 				KeyVersion: sh.KeyVersion, EncryptedKey: sh.EncryptedKey})
 		}
 		if err := s.store.AddKeyShares(ctx, shares); err != nil {
-			writeErr(w, http.StatusInternalServerError, "add shares")
+			writeErr(w, http.StatusInternalServerError, "failed to add vault key shares")
 			return
 		}
 	}
