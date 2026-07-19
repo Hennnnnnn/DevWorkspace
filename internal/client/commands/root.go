@@ -15,7 +15,7 @@ import (
 
 // Version is set at build time via ldflags.
 // Example: go build -ldflags "-X github.com/Hennnnnnn/DevWorkspace/internal/client/commands.Version=v0.1.0"
-var Version = "dev"
+var Version = "v0.4.0"
 
 var updateCheckFile string
 
