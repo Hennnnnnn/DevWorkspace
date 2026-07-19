@@ -21,6 +21,7 @@ $BinDir = if ($LocalPath) { Resolve-Path $LocalPath } else { "$HOME\.devsync\bin
 $ServerUrl = "https://devworkspace.onrender.com"
 
 Write-Host "==> devsync installer" -ForegroundColor Cyan
+Write-Host "   target: $ServerUrl" -ForegroundColor Gray
 
 # --- 1. resolve binary source ---
 if ($LocalPath) {
