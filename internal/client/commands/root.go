@@ -98,6 +98,7 @@ func NewRoot() *cobra.Command {
 	root.AddCommand(
 		newUpdateCmd(),
 		newSetupCmd(),
+		newGuideCmd(),
 		// setup / identity
 		newConfigCmd(),
 		newInitCmd(),

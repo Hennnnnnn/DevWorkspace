@@ -8,10 +8,13 @@
     One-liner: irm https://raw.githubusercontent.com/Hennnnnnn/DevWorkspace/main/scripts/install.ps1 | iex
 .PARAMETER LocalPath
     Path to a pre-built bin/ directory. Skips download & build.
+.PARAMETER Dev
+    Build from the latest commit on main instead of downloading a release. Requires Go.
 #>
 
 param(
-    [string]$LocalPath
+    [string]$LocalPath,
+    [switch]$Dev
 )
 
 $ErrorActionPreference = "Stop"
@@ -30,28 +33,32 @@ if ($LocalPath) {
     Write-Host "   using pre-built binaries from $LocalPath"
 }
 else {
-    # Try download from latest release first.
+    # Try download from latest release first (skip with -Dev).
     $downloaded = $false
-    $api = "https://api.github.com/repos/$Repo/releases/latest"
-    try {
-        $release = Invoke-RestMethod -Uri $api -ErrorAction Stop
-        $tag = $release.tag_name
-        $url = "https://github.com/$Repo/releases/download/$tag/devsync_windows_amd64.zip"
-        Write-Host "   downloading $tag ..." -ForegroundColor Gray
+    if (-not $Dev) {
+        $api = "https://api.github.com/repos/$Repo/releases/latest"
+        try {
+            $release = Invoke-RestMethod -Uri $api -ErrorAction Stop
+            $tag = $release.tag_name
+            $url = "https://github.com/$Repo/releases/download/$tag/devsync_windows_amd64.zip"
+            Write-Host "   downloading $tag ..." -ForegroundColor Gray
 
-        $tmp = Join-Path $env:TMP "devsync-$(Get-Random)"
-        New-Item -ItemType Directory -Path $tmp -Force | Out-Null
-        $zip = Join-Path $tmp "archive.zip"
-        Invoke-WebRequest -Uri $url -OutFile $zip
-        Expand-Archive -Path $zip -DestinationPath $tmp -Force
-        Move-Item "$tmp\devsync.exe" "$BinDir\devsync.exe" -Force -ErrorAction Stop
-        Move-Item "$tmp\devsync-server.exe" "$BinDir\devsync-server.exe" -Force -ErrorAction Stop
-        Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
-        $downloaded = $true
-        Write-Host "   downloaded devsync + devsync-server" -ForegroundColor Green
-    }
-    catch {
-        Write-Host "   no release found, building from source" -ForegroundColor Yellow
+            $tmp = Join-Path $env:TMP "devsync-$(Get-Random)"
+            New-Item -ItemType Directory -Path $tmp -Force | Out-Null
+            $zip = Join-Path $tmp "archive.zip"
+            Invoke-WebRequest -Uri $url -OutFile $zip
+            Expand-Archive -Path $zip -DestinationPath $tmp -Force
+            Move-Item "$tmp\devsync.exe" "$BinDir\devsync.exe" -Force -ErrorAction Stop
+            Move-Item "$tmp\devsync-server.exe" "$BinDir\devsync-server.exe" -Force -ErrorAction Stop
+            Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+            $downloaded = $true
+            Write-Host "   downloaded devsync + devsync-server" -ForegroundColor Green
+        }
+        catch {
+            Write-Host "   no release found, building from source" -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "   -Dev: building from source" -ForegroundColor Yellow
     }
 
     if (-not $downloaded) {
