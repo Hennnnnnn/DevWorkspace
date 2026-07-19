@@ -101,16 +101,20 @@ try {
 }
 
 # --- 4. auto-completion (PowerShell) ---
-$completionScript = & devsync completion powershell 2>&1 | Out-String
-if ($LASTEXITCODE -eq 0 -and $completionScript) {
-    $profileDir = Split-Path $PROFILE -Parent
-    if (!(Test-Path $profileDir)) { New-Item -ItemType Directory -Path $profileDir -Force | Out-Null }
-    if (!(Test-Path $PROFILE) -or (Get-Content $PROFILE -Raw) -notmatch "devsync completion") {
-        Add-Content $PROFILE "`n# devsync tab completion`n$completionScript"
-        Write-Host "   tab completion added to `$PROFILE" -ForegroundColor Green
-    } else {
-        Write-Host "   tab completion already configured" -ForegroundColor Gray
+try {
+    $completionScript = & devsync completion powershell 2>&1 | Out-String
+    if ($LASTEXITCODE -eq 0 -and $completionScript) {
+        $profileDir = Split-Path $PROFILE -Parent
+        if (!(Test-Path $profileDir)) { New-Item -ItemType Directory -Path $profileDir -Force | Out-Null }
+        if (!(Test-Path $PROFILE) -or (Get-Content $PROFILE -Raw) -notmatch "devsync completion") {
+            Add-Content $PROFILE "`n# devsync tab completion`n$completionScript"
+            Write-Host "   tab completion added to `$PROFILE" -ForegroundColor Green
+        } else {
+            Write-Host "   tab completion already configured" -ForegroundColor Gray
+        }
     }
+} catch {
+    Write-Host "   tab completion skipped (run 'devsync completion powershell >> `$PROFILE' manually)" -ForegroundColor Gray
 }
 
 Write-Host ""
