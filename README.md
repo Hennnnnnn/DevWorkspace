@@ -5,6 +5,8 @@
 
 End-to-end encrypted credential store. Push a secret from one device, pull it on another. The server sees only ciphertext — zero-knowledge.
 
+**`devsync`** (no arguments) launches an interactive TUI with drill-down navigation. `devsync <subcommand>` keeps the full CLI for scripts.
+
 ---
 
 ## Autocomplete (Tab)
@@ -63,6 +65,29 @@ devsync push .env --vault secrets
 ```
 
 Run `devsync pull .env --vault secrets` to decrypt and download.
+
+After setup, run `devsync` (no arguments) for the interactive TUI.
+
+---
+
+## Interactive TUI
+
+Run `devsync` with no arguments in a terminal to launch the Bubble Tea TUI:
+
+| View | Keys | What it does |
+|------|------|-------------|
+| **Top menu** | enter | Select Vaults / Teams / Devices / Audit |
+| **Vaults** | enter → files | Browse vaults, drill into file list |
+| **Files** | p / u / d / enter | Pull, push (file picker), delete, version history |
+| **History** | c | Checkout a specific version |
+| **Teams** | enter → members, c / j / d | View members, create, join, delete team |
+| **Members** | a / p | Approve pending user, toggle pending filter |
+| **Devices** | enter | Revoke a device (with confirm) |
+| **Audit** | enter → vault | Read-only audit log per vault |
+
+**Navigation**: `esc` goes back, `ctrl+c` quits. `U` unlocks the agent when locked. Destructive actions (delete, revoke) show a confirm dialog.
+
+TUI calls the same `internal/client/actions` functions as the CLI — no behavior difference.
 
 ---
 
@@ -170,7 +195,11 @@ State lives in `~/.devsync/`. No config needed — server URL is baked into the 
 cmd/devsync/             CLI entrypoint
 cmd/devsync-server/      Server entrypoint
 internal/
-  client/                Config, keystore, agent, signed API client, commands
+  client/
+    commands/            Cobra CLI commands (thin wrappers calling actions)
+    actions/             Business logic shared between CLI and TUI
+    tui/                 Bubble Tea TUI (app.go, menu, vaults, teams, devices, audit, files, filepicker, confirm, unlock, theme)
+    ...                  Config, keystore, agent, signed API client
   server/                HTTP handlers, auth middleware, Postgres store
   crypto/                E2E primitives (Ed25519, X25519, secretbox, Argon2id)
   protocol/              Wire contract (signing, headers, DTOs)
