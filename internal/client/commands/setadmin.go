@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+
+	"github.com/Hennnnnnn/DevWorkspace/internal/client/actions"
 )
 
 func newSetAdminCmd() *cobra.Command {
@@ -13,7 +15,7 @@ func newSetAdminCmd() *cobra.Command {
 		Long:  "Grant admin privileges to an existing active user.\n\nArguments:\n  <user>  Username to promote",
 		Args:  expectArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			cl, _, err := authedClient()
+			cl, _, err := actions.AuthedClient()
 			if err != nil {
 				return err
 			}

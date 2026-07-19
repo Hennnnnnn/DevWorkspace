@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Hennnnnnn/DevWorkspace/internal/client/actions"
 	"github.com/Hennnnnnn/DevWorkspace/internal/client/agent"
 	"github.com/Hennnnnnn/DevWorkspace/internal/client/api"
 	"github.com/Hennnnnnn/DevWorkspace/internal/client/config"
@@ -65,7 +66,7 @@ Flags let you skip prompts if you already know the values.`,
 			var aErr error
 			if cfg.Username != "" {
 				var cl *api.Client
-				cl, _, aErr = authedClient()
+				cl, _, aErr = actions.AuthedClient()
 				if aErr == nil {
 					var who struct {
 						IsAdmin bool `json:"is_admin"`

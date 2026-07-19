@@ -1,125 +1,54 @@
-# devsync — Implementation Plan
+# devsync TUI — Implementation Plan
 
-E2E credential store, akses gaya git/SSH. `push` file secret, `pull` di device lain. Multi-tim.
+Base CLI (vaults/teams/devices/files/audit, E2E crypto, agent unlock) sudah selesai. Plan ini nambahin TUI di atas CLI yang ada, tanpa ubah behavior CLI.
 
-## Konsep
+## Keputusan (hasil grilling)
 
-Bungkus workflow git/SSH untuk credential terenkripsi end-to-end. Server buta (zero-knowledge) — cuma simpan blob terenkripsi. Enkripsi/dekripsi selalu di client.
+1. **Scope**: Full TUI — semua fitur (vaults, teams, devices, files, audit, approvals). CLI tetap ada, tak berubah.
+2. **Framework**: `charmbracelet/bubbletea` (core) + `charmbracelet/bubbles` (widgets: list, textinput, filepicker, spinner, viewport) + `charmbracelet/lipgloss` (styling).
+3. **Invocation**: bare `devsync` (tty terdeteksi via `term.IsTerminal`) → launch TUI. `devsync <subcommand>` tetap CLI biasa, scriptable, tak berubah. Non-tty (piped) tanpa subcommand → fallback ke help seperti sekarang.
+4. **Locked state**: degrade per-view. View yang butuh vault key decrypt (file content, push, pull) tampil state "locked — press U to unlock" kalau agent locked. View lain (teams, vaults list, devices, audit log — metadata only) langsung jalan tanpa perlu unlock.
+5. **Code sharing**: extract business logic dari tiap `RunE` closure ke `internal/client/actions` package (plain functions, no cobra dependency). Cobra `RunE` jadi thin wrapper: panggil action, print hasil. TUI panggil fungsi yang sama.
+6. **Progress reporting**: tiap action multi-step (push, pull, dll) terima `onStep func(msg string)` callback param. CLI pass callback yang drive `startSpinner` (existing). TUI pass callback yang `program.Send(stepMsg{msg})` ke model.
+7. **Navigasi**: drill-down stack (gaya lazygit/k9s). Top menu → list → detail → actions. Esc = pop stack (back). Data hierarchical (team → vault → file → versions), drill-down match struktur ini.
+8. **File picker (push)**: pakai Bubbles `filepicker` widget — full filesystem navigation, bukan text input manual.
+9. **Destructive actions confirm**: TUI only. `rm`, `delete-team`, `device revoke`, vault `revoke` tampil dialog "Delete X? (y/N)" sebelum eksekusi. CLI tetap immediate/no-confirm (scripting contract tak berubah).
+10. **Styling**: full semantic theme via Lipgloss — success (hijau) / danger (merah, buat confirm destructive) / warning (kuning, buat locked state) / info (biru) / selection (accent color buat highlight list item aktif).
+11. **Package layout**: `internal/client/tui/` — satu file per view (`vaults.go`, `teams.go`, `devices.go`, `files.go`, `audit.go`, `filepicker.go`, `confirm.go`, `unlock.go`, `theme.go`, `app.go` sbg root model). Import `internal/client/actions`.
+12. **Dependencies baru** (tambah ke go.mod): `github.com/charmbracelet/bubbletea`, `github.com/charmbracelet/bubbles`, `github.com/charmbracelet/lipgloss`.
 
-## Model Data
+## Progress
 
-```
-User ──has many──> Device (tiap device 1 keypair)
-User ──member of──> Team
-Team ──has many──> Vault
-Vault ──granted to──> User (per-vault access)
-Vault ──has many──> File (blob utuh, versioned)
-```
+- [x] Fase 1 — Extract actions package (`internal/client/actions/`, semua RunE jadi thin wrapper). `go build`/`go vet` clean.
+- [x] Fase 2 — Deps + skeleton (`go get` bubbletea/bubbles/lipgloss, `tui/theme.go`, `tui/app.go` root model, wired `cmd/devsync/main.go`: no-args+tty → TUI, else CLI).
+- [x] Fase 3 — Top-level menu + drill-down stack (`tui/stack.go` push/pop msg, `tui/menu.go` top menu list Vaults/Teams/Devices/Audit, `tui/placeholder.go` stub views, `tui/app.go` rootModel stack, esc=back/quit, ctrl+c=quit, WindowSizeMsg propagate ke stack).
+- [x] Fase 4 — Vaults + Files view (`tui/vaults.go` list vault→files; `tui/files.go` files list + history detail; `actions.ListVaults` baru; enter=drill, p=pull, u=push (filepicker), d=rm, c=checkout; async load via tea.Cmd, status banner). `go build`/`go vet` clean.
+- [x] Fase 5 — Locked-state handling (`tui/unlock.go` masked textinput view; `actions.IsUnlocked` baru; files+history view: banner "locked — press U", key U buka unlock, pull/checkout guard IsUnlocked; unlock sukses = popView balik). `go build` clean.
+- [x] Fase 6 — Teams view
+- [x] Fase 7 — Devices view
+- [x] Fase 8 — Audit view
+- [x] Fase 9 — Confirm dialog component
+- [x] Fase 10 — Polish
+- [ ] Fase 11 — Testing
 
-- File = blob utuh (`.env`, cert, `id_rsa`, JSON). Server tak parse isi.
-- Akses **per-vault** via grant (bukan otomatis semua anggota tim).
-
-## Keamanan (E2E)
-
-- Enkripsi client-side; server simpan blob terenkripsi + metadata.
-- **Vault key** simetris **per-vault**, di-enkripsi ke public key tiap **device** anggota yang di-grant.
-- Keypair **per-device** + passphrase (gaya SSH). Private key di `~/.devsync/`.
-- Auth request = **signature** pakai device private key. Sign `(method + path + body-hash + timestamp)`. Server verifikasi pakai stored public key. Timestamp basi ditolak (anti-replay). Nol kredensial tambahan.
-- **Agent** unlock gaya `ssh-agent`: `devsync unlock` sekali, key di memori agent + timeout konfigurable.
-
-## Identitas & Onboarding
-
-- **Self-register**: `devsync register` → generate keypair lokal → kirim `(username, device public key)` → status pending.
-- **Join**: `devsync join <team>` → masuk antrian approval.
-- **Approve (wajib fingerprint)**: admin `devsync approve <user> --fingerprint <fp>`. Fingerprint dikonfirmasi out-of-band. Kalau fingerprint tak cocok → ditolak. Saat approve, client admin enkripsi vault key ke device user (untuk vault yang di-grant).
-- **Device pertama** user: admin approve (fingerprint). **Device berikut**: self-approve via device lama (device trusted tanda tangani device baru, gaya WhatsApp/Signal link-device).
-- **Bootstrap admin pertama**: CLI di server (`devsync-server create-admin <user>`). Butuh shell access. Nol window balapan.
-
-## Peran
-
-- **Admin**: approve user, bikin team/vault, grant/revoke akses vault. Untuk grant, admin harus punya akses vault itu (megang key) — konsisten E2E.
-- **Member**: push + pull vault yang di-grant.
-- (Peran lebih halus / reader-only = enhancement nanti.)
-
-## Konsistensi & Data
-
-- **Version-check** per file (optimistic lock). Push stale ditolak → "pull dulu". Gaya git rejected push.
-- **Soft delete** — file ditandai deleted, versi lama tetap di history. Bisa restore. `purge` = enhancement.
-- **History + rollback**: `history <file>`, `checkout <file> --version N`.
-- **Limit** ~1MB/file, jenis bebas.
-- **Audit log** metadata: `(user, device, aksi, target, timestamp)`. Isi tak dicatat (tetap E2E). `devsync audit <vault>`.
-
-## Revoke & Recovery
-
-- **Revoke** per-device (device hilang) / per-vault (cabut akses).
-- Setelah revoke → **rotate vault key** (generate key baru, re-encrypt semua file, distribusi ke device tersisa) + **reminder rotate secret asli** (pakai audit log untuk sebut file mana yang pernah diakses).
-- **No backdoor**. Recovery via **re-share antar-anggota** (multi-holder: anggota lain re-encrypt vault key ke keypair baru user setelah register+approve ulang).
-- `init` **paksa backup private key** (tampilkan, suruh simpan aman).
-
-## Stack & Deploy
-
-- Client + server **Go**, single static binary.
-- **Postgres** (blob as BLOB/bytea, metadata relasional).
-- Transport **REST over HTTPS + JSON**. Blob base64.
-- Crypto: keypair + symmetric (arah age/NaCl-style — libsodium/`golang.org/x/crypto/nacl` atau `filippo.io/age`).
-- Deploy: **self-hosted single instance**, docker-compose (server Go + Postgres), TLS via Caddy/nginx.
-- Client `devsync config set server_url https://...`.
-
-## Command CLI (lengkap dari awal)
-
-Setup/identitas:
-- `devsync init` — generate keypair+passphrase, paksa backup private key
-- `devsync register` — kirim public key device ke server
-- `devsync config set server_url <url>`
-- `devsync unlock` — start agent session
-- `devsync whoami`
-
-Team/vault:
-- `devsync create-team <name>` (admin)
-- `devsync join <team>`
-- `devsync teams`
-- `devsync members` / `devsync members --pending`
-- `devsync approve <user> --fingerprint <fp>` (admin)
-- `devsync create-vault <name>` (admin)
-- `devsync grant <user> <vault>` / `devsync revoke <user> <vault>` (admin)
-
-File:
-- `devsync push <file> --vault <v>`
-- `devsync pull [<file>] --vault <v>`
-- `devsync history <file> --vault <v>`
-- `devsync checkout <file> --version N --vault <v>`
-- `devsync rm <file> --vault <v>` (soft delete)
-- `devsync audit <vault>`
-
-Device:
-- `devsync device add` — self-approve via device lama
-- `devsync device list`
-- `devsync device revoke <device>`
-
-Server:
-- `devsync-server create-admin <user>`
+Belum smoke-test interaktif TUI beneran (perlu real tty) — cuma verify via `go build`/`go vet`. Test manual dari terminal user sendiri masih pending.
 
 ## Fase Build (urutan usul)
 
-1. **Fondasi**: struktur repo Go (client + server), config server_url, Postgres schema + migrations, docker-compose.
-2. **Crypto core**: keygen device (`init`), passphrase encrypt private key, backup flow, sign/verify request. Unit test isolasi.
-3. **Auth transport**: middleware verifikasi signature di server, stored public key, anti-replay timestamp.
-4. **Register + bootstrap**: `register`, `create-admin` (server CLI), user pending state.
-5. **Team + approve**: `create-team`, `join`, `members --pending`, `approve --fingerprint`.
-6. **Vault + grant**: `create-vault`, `grant`/`revoke`, vault key generation + enkripsi ke device keys.
-7. **Push/pull**: enkripsi file client-side, upload/download blob, version-check, size limit.
-8. **History/rollback/soft-delete**: `history`, `checkout`, `rm`.
-9. **Multi-device**: `device add` (self-approve via device lama), `device list/revoke`.
-10. **Revoke + rotate**: rotate vault key, re-encrypt, reminder rotate secret asli.
-11. **Agent**: `unlock`, key di memori + timeout.
-12. **Audit**: log tiap aksi, `audit <vault>`.
-13. **Packaging**: single binary release, scoop/brew manifest.
+1. **Extract actions package** (`internal/client/actions/`): pindah logic dari `RunE` di `files.go`, `teams.go`, `vaults.go`, `device.go`, `register.go`, `approve.go`, `unlock.go` ke fungsi plain dengan `onStep` callback. Refactor semua `RunE` existing jadi thin wrapper panggil fungsi ini + print via `startSpinner`. Verifikasi: `go build`, semua CLI command jalan sama seperti sebelum (manual smoke test tiap command).
+2. **Deps + skeleton**: `go get` tiga package Bubble Tea. Bikin `internal/client/tui/app.go` — root model kosong (cuma render "hello"), `theme.go` dengan 5 warna semantic via Lipgloss. Wire `cmd/devsync/main.go`: kalau no-args + `term.IsTerminal(stdout)` → `tui.Run()`, else `commands.NewRoot().Execute()`.
+3. **Top-level menu + drill-down mekanisme**: model stack pattern (push/pop view model on selection/Esc). Top menu: Vaults / Teams / Devices / Audit.
+4. **Vaults + Files view** (paling kompleks, prioritas dulu): list vault → list file per vault (pakai `actions.ListFiles`) → detail file (history) → actions (pull, checkout, rm+confirm). Push pakai `filepicker` widget → confirm vault target → jalanin `actions.Push` dgn step callback.
+5. **Locked-state handling**: cek agent status di file view; kalau locked, tampil banner + key `U` buka `unlock.go` view (passphrase input pakai `bubbles/textinput` masked).
+6. **Teams view**: list teams → members (+ pending) → approve (fingerprint input) → create-team/delete-team (delete pakai confirm dialog).
+7. **Devices view**: list devices → revoke (confirm dialog) → add device flow.
+8. **Audit view**: read-only list, no drill-down lebih dalam dari vault → entries.
+9. **Confirm dialog component**: generic reusable `confirm.go` model dipanggil dari rm/delete-team/revoke/device-revoke.
+10. **Polish**: keybinding help footer tiap view, error display (toast/banner style), window resize handling.
+11. **Testing**: manual QA tiap view + tiap action end-to-end (push→pull roundtrip, approve flow, revoke flow) di real server/vault test data.
 
-## Threat Model (ringkas)
+## Non-goals (eksplisit skip, jangan overbuild)
 
-- Server bocor → attacker cuma dapat blob terenkripsi (E2E).
-- Key substitution di register → ditutup fingerprint verification wajib saat approve.
-- Anggota keluar → revoke + rotate + rotate secret asli (audit sebut file terdampak).
-- Device hilang → revoke per-device tanpa ganggu device lain.
-- Replay request → timestamp + verifikasi signature.
-- Lupa key → recovery via multi-holder re-share; no backdoor.
+- Tak ada TUI buat `config`, `init`, `register`, `bootstrap-admin`, `set-admin`, `update`, `guide` — command setup/onetime ini tetap CLI-only, jarang dipakai interaktif berulang.
+- Tak ada theme customization/config (warna hardcoded di `theme.go`, bukan user-configurable).
+- Tak ada mouse support — keyboard-only nav (drill-down + confirm dialogs).

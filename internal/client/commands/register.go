@@ -2,15 +2,11 @@ package commands
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
-	"github.com/Hennnnnnn/DevWorkspace/internal/client/api"
+	"github.com/Hennnnnnn/DevWorkspace/internal/client/actions"
 	"github.com/Hennnnnnn/DevWorkspace/internal/client/config"
-	"github.com/Hennnnnnn/DevWorkspace/internal/client/keystore"
-	"github.com/Hennnnnnn/DevWorkspace/internal/crypto"
-	"github.com/Hennnnnnn/DevWorkspace/internal/protocol"
 )
 
 func newRegisterCmd() *cobra.Command {
@@ -32,40 +28,18 @@ func newRegisterCmd() *cobra.Command {
 					return err
 				}
 			}
-			if deviceName == "" {
-				host, _ := os.Hostname()
-				deviceName = host
-			}
 			pass, err := promptPassphrase("Device passphrase: ")
 			if err != nil {
 				return err
 			}
-			kp, err := keystore.Unlock(pass)
+			res, err := actions.Register(username, deviceName, pass)
 			if err != nil {
 				return err
 			}
-
-			req := protocol.RegisterRequest{
-				Username:    username,
-				DeviceName:  deviceName,
-				SignPubKey:  kp.SignPub,
-				BoxPubKey:   kp.BoxPub[:],
-				Fingerprint: crypto.Fingerprint(kp.SignPub),
-			}
-			var resp protocol.RegisterResponse
-			if err := api.PostUnsigned(cfg.ServerURL, "/register", req, &resp); err != nil {
-				return err
-			}
-			// Persist identity for future signed requests.
-			cfg.Username = username
-			cfg.DeviceID = resp.DeviceID
-			if err := cfg.Save(); err != nil {
-				return err
-			}
-			fmt.Printf("registered as %q — status: %s\n", username, resp.Status)
-			if resp.Status == "pending" {
+			fmt.Printf("registered as %q — status: %s\n", res.Username, res.Status)
+			if res.Status == "pending" {
 				fmt.Printf("Ask an admin to approve you:\n  devsync approve %s --fingerprint %s\n",
-					username, req.Fingerprint)
+					res.Username, res.Fingerprint)
 			}
 			return nil
 		},
@@ -80,12 +54,8 @@ func newWhoAmICmd() *cobra.Command {
 		Use:   "whoami",
 		Short: "Show the current identity and device status",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			cl, _, err := authedClient()
+			resp, err := actions.WhoAmI()
 			if err != nil {
-				return err
-			}
-			var resp protocol.WhoAmIResponse
-			if err := cl.Get("/whoami", nil, &resp); err != nil {
 				return err
 			}
 			admin := ""

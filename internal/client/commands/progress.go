@@ -5,7 +5,15 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/Hennnnnnn/DevWorkspace/internal/client/actions"
 )
+
+// spinnerStep adapts actions.StepFunc to the CLI's spinner: each step starts
+// a spinner and returns its `done` method as the completion callback.
+func spinnerStep(msg string) actions.DoneFunc {
+	return startSpinner(msg).done
+}
 
 type spinner struct {
 	mu     sync.Mutex

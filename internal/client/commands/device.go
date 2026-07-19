@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Hennnnnnn/DevWorkspace/internal/protocol"
+	"github.com/Hennnnnnn/DevWorkspace/internal/client/actions"
 )
 
 func newDeviceCmd() *cobra.Command {
@@ -22,15 +22,11 @@ func newDeviceListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List your devices",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			cl, _, err := authedClient()
+			devices, err := actions.ListDevices()
 			if err != nil {
 				return err
 			}
-			var out protocol.DeviceList
-			if err := cl.Get("/devices", nil, &out); err != nil {
-				return err
-			}
-			for _, d := range out.Devices {
+			for _, d := range devices {
 				fmt.Printf("%-8s %-10s %-8s %s\n", short(d.ID), d.Name, d.Status, d.Fingerprint)
 			}
 			return nil
@@ -45,11 +41,7 @@ func newDeviceRevokeCmd() *cobra.Command {
 		Long:  "Revoke a device by its ID.\n\nArguments:\n  <device-id>  Device ID (use `devsync device list` to find it)",
 		Args:  expectArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			cl, _, err := authedClient()
-			if err != nil {
-				return err
-			}
-			if err := cl.Post("/devices/link", protocol.RevokeRequest{DeviceID: args[0]}, nil); err != nil {
+			if err := actions.RevokeDevice(args[0]); err != nil {
 				return err
 			}
 			fmt.Printf("revoked device %s\n", args[0])

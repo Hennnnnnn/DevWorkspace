@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Hennnnnnn/DevWorkspace/internal/client/agent"
+	"github.com/Hennnnnnn/DevWorkspace/internal/client/actions"
 )
 
 func newUnlockCmd() *cobra.Command {
@@ -19,7 +19,7 @@ func newUnlockCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := agent.Unlock(pass, ttl); err != nil {
+			if err := actions.Unlock(pass, ttl); err != nil {
 				return err
 			}
 			fmt.Printf("unlocked for %s\n", ttl)
@@ -32,7 +32,7 @@ func newUnlockCmd() *cobra.Command {
 		Use:   "lock",
 		Short: "Forget the unlocked key immediately",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			if err := agent.Lock(); err != nil {
+			if err := actions.Lock(); err != nil {
 				return err
 			}
 			fmt.Println("locked")

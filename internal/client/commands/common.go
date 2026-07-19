@@ -8,26 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
-
-	"github.com/Hennnnnnn/DevWorkspace/internal/client/agent"
-	"github.com/Hennnnnnn/DevWorkspace/internal/client/api"
-	"github.com/Hennnnnnn/DevWorkspace/internal/client/config"
 )
-
-// authedClient loads config + the unlocked keypair from the agent and returns
-// a signed API client.
-func authedClient() (*api.Client, *config.Config, error) {
-	cfg, err := config.Load()
-	if err != nil {
-		return nil, nil, err
-	}
-	kp, err := agent.Get()
-	if err != nil {
-		return nil, nil, err
-	}
-	cl, err := api.New(cfg, kp)
-	return cl, cfg, err
-}
 
 // promptPassphrase reads a passphrase without echo. For non-interactive use
 // (scripts, CI) it falls back to the DEVSYNC_PASSPHRASE env var.

@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Hennnnnnn/DevWorkspace/internal/protocol"
+	"github.com/Hennnnnnn/DevWorkspace/internal/client/actions"
 )
 
 func newInviteCmd() *cobra.Command {
@@ -16,11 +16,7 @@ func newInviteCmd() *cobra.Command {
 		Long:  "Add a user to a team directly. They don't need to request join first.\n\nArguments:\n  <user>  Username to invite",
 		Args:  expectArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			cl, _, err := authedClient()
-			if err != nil {
-				return err
-			}
-			if err := cl.Post("/admin/invite", protocol.InviteRequest{Username: args[0], TeamName: team}, nil); err != nil {
+			if err := actions.Invite(args[0], team); err != nil {
 				return err
 			}
 			fmt.Printf("invited %s to team %q\n", args[0], team)
@@ -39,11 +35,7 @@ func newDeleteTeamCmd() *cobra.Command {
 		Long:  "Permanently delete a team, its vaults, files, and memberships.\n\nArguments:\n  <name>  Team name to delete",
 		Args:  expectArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			cl, _, err := authedClient()
-			if err != nil {
-				return err
-			}
-			if err := cl.Post("/admin/delete-team", protocol.CreateTeamRequest{Name: args[0]}, nil); err != nil {
+			if err := actions.DeleteTeam(args[0]); err != nil {
 				return err
 			}
 			fmt.Printf("team %q deleted\n", args[0])
@@ -59,12 +51,8 @@ func newCreateTeamCmd() *cobra.Command {
 		Long:  "Create a new team.\n\nArguments:\n  <name>  Team name",
 		Args:  expectArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			cl, _, err := authedClient()
+			t, err := actions.CreateTeam(args[0])
 			if err != nil {
-				return err
-			}
-			var t protocol.Team
-			if err := cl.Post("/admin/create-team", protocol.CreateTeamRequest{Name: args[0]}, &t); err != nil {
 				return err
 			}
 			fmt.Printf("team %q created\n", t.Name)
@@ -80,11 +68,7 @@ func newJoinCmd() *cobra.Command {
 		Long:  "Request to join an existing team (requires admin approval).\n\nArguments:\n  <team>  Team name to join",
 		Args:  expectArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			cl, _, err := authedClient()
-			if err != nil {
-				return err
-			}
-			if err := cl.Post("/teams/join", protocol.CreateTeamRequest{Name: args[0]}, nil); err != nil {
+			if err := actions.Join(args[0]); err != nil {
 				return err
 			}
 			fmt.Printf("join request sent for %q — pending approval\n", args[0])
@@ -98,19 +82,15 @@ func newTeamsCmd() *cobra.Command {
 		Use:   "teams",
 		Short: "List teams you belong to",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			cl, _, err := authedClient()
+			teams, err := actions.ListTeams()
 			if err != nil {
 				return err
 			}
-			var out protocol.TeamList
-			if err := cl.Get("/teams", nil, &out); err != nil {
-				return err
-			}
-			if len(out.Teams) == 0 {
+			if len(teams) == 0 {
 				fmt.Println("(no teams)")
 				return nil
 			}
-			for _, t := range out.Teams {
+			for _, t := range teams {
 				fmt.Println(t.Name)
 			}
 			return nil
@@ -125,23 +105,15 @@ func newMembersCmd() *cobra.Command {
 		Use:   "members",
 		Short: "List team members",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			cl, _, err := authedClient()
+			members, err := actions.ListMembers(team, pending)
 			if err != nil {
 				return err
 			}
-			q := urlValues("team", team)
-			if pending {
-				q.Set("pending", "true")
-			}
-			var out protocol.MemberList
-			if err := cl.Get("/members", q, &out); err != nil {
-				return err
-			}
-			if len(out.Members) == 0 {
+			if len(members) == 0 {
 				fmt.Println("(no members)")
 				return nil
 			}
-			for _, m := range out.Members {
+			for _, m := range members {
 				fmt.Printf("%-20s %-8s %s\n", m.Username, m.Status, m.Fingerprint)
 			}
 			return nil

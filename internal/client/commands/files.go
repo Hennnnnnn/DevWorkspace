@@ -2,16 +2,10 @@ package commands
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 
-	"github.com/Hennnnnnn/DevWorkspace/internal/client/api"
-	"github.com/Hennnnnnn/DevWorkspace/internal/crypto"
-	"github.com/Hennnnnnn/DevWorkspace/internal/protocol"
+	"github.com/Hennnnnnn/DevWorkspace/internal/client/actions"
 	"github.com/spf13/cobra"
 )
-
-const maxPlaintext = 1 << 20 // 1 MB
 
 func newPushCmd() *cobra.Command {
 	var vault string
@@ -21,69 +15,13 @@ func newPushCmd() *cobra.Command {
 		Long:  "Encrypt a local file and upload it to a vault.\n\nArguments:\n  <file>  Path to the local file to push",
 		Args:  expectArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			cl, _, err := authedClient()
-			if err != nil {
-				return err
-			}
-			name := filepath.Base(args[0])
-
-			sp := startSpinner("reading " + name)
-			plain, err := os.ReadFile(args[0])
-			if err != nil {
-				return err
-			}
-			if len(plain) > maxPlaintext {
-				return fmt.Errorf("file exceeds 1MB limit (%d bytes)", len(plain))
-			}
-			sp.done("read " + name)
-
-			sp = startSpinner("fetching vault key")
-			vk, keyVersion, err := fetchVaultKey(cl, vault)
-			if err != nil {
-				return err
-			}
-			sp.done("got vault key")
-
-			sp = startSpinner(fmt.Sprintf("encrypting %s (%.1f KB)", name, float64(len(plain))/1024))
-			ct, err := crypto.EncryptBlob(vk, plain)
-			if err != nil {
-				return err
-			}
-			sp.done("encrypted")
-
-			// Determine base version (0 if new) for optimistic lock.
-			base, err := currentVersion(cl, vault, name)
-			if err != nil {
-				return fmt.Errorf("check current version: %w", err)
-			}
-			req := protocol.PushRequest{Vault: vault, File: protocol.FilePush{
-				Path: name, KeyVersion: keyVersion, Ciphertext: ct, BaseVersion: base}}
-			sp = startSpinner(fmt.Sprintf("uploading %s (%.1f KB)", name, float64(len(ct))/1024))
-			var resp protocol.PushResponse
-			if err := cl.Post("/files/push", req, &resp); err != nil {
-				return err
-			}
-			sp.done(fmt.Sprintf("pushed %s -> version %d", name, resp.Version))
-			return nil
+			_, err := actions.Push(args[0], vault, spinnerStep)
+			return err
 		},
 	}
 	cmd.Flags().StringVar(&vault, "vault", "", "vault name")
 	_ = cmd.MarkFlagRequired("vault")
 	return cmd
-}
-
-// currentVersion returns the latest version of a file, or 0 if absent.
-func currentVersion(cl *api.Client, vault, path string) (int, error) {
-	var files protocol.FileListResponse
-	if err := cl.Get("/files", urlValues("vault", vault), &files); err != nil {
-		return 0, err
-	}
-	for _, f := range files.Files {
-		if f.Path == path {
-			return f.LatestVersion, nil
-		}
-	}
-	return 0, nil
 }
 
 func newPullCmd() *cobra.Command {
@@ -94,16 +32,12 @@ func newPullCmd() *cobra.Command {
 		Long:  "Download and decrypt a file from a vault. Omit <file> to list all files.\n\nArguments:\n  <file>  (Optional) File name in the vault",
 		Args:  maxArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			cl, _, err := authedClient()
-			if err != nil {
-				return err
-			}
 			if len(args) == 0 {
-				var files protocol.FileListResponse
-				if err := cl.Get("/files", urlValues("vault", vault), &files); err != nil {
+				files, err := actions.ListFiles(vault)
+				if err != nil {
 					return err
 				}
-				for _, f := range files.Files {
+				for _, f := range files {
 					del := ""
 					if f.Deleted {
 						del = " (deleted)"
@@ -112,36 +46,8 @@ func newPullCmd() *cobra.Command {
 				}
 				return nil
 			}
-			sp := startSpinner("fetching vault key")
-			vk, _, err := fetchVaultKey(cl, vault)
-			if err != nil {
-				return err
-			}
-			sp.done("got vault key")
-
-			sp = startSpinner("downloading " + args[0])
-			var pr protocol.PullResponse
-			if err := cl.Get("/files/pull", urlValues("vault", vault, "path", args[0]), &pr); err != nil {
-				return err
-			}
-			if pr.Deleted {
-				return fmt.Errorf("%s is deleted (use checkout --version N to restore)", args[0])
-			}
-			sp.done(fmt.Sprintf("downloaded (%.1f KB)", float64(len(pr.Ciphertext))/1024))
-
-			sp = startSpinner("decrypting")
-			plain, err := crypto.DecryptBlob(vk, pr.Ciphertext)
-			if err != nil {
-				return err
-			}
-			if out == "" {
-				out = args[0]
-			}
-			if err := os.WriteFile(out, plain, 0o600); err != nil {
-				return err
-			}
-			sp.done(fmt.Sprintf("pulled %s (v%d) -> %s", args[0], pr.Version, out))
-			return nil
+			_, err := actions.Pull(vault, args[0], out, spinnerStep)
+			return err
 		},
 	}
 	cmd.Flags().StringVar(&vault, "vault", "", "vault name")
@@ -158,15 +64,11 @@ func newHistoryCmd() *cobra.Command {
 		Long:  "Show the version history of a file in a vault.\n\nArguments:\n  <file>  File name in the vault",
 		Args:  expectArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			cl, _, err := authedClient()
+			entries, err := actions.History(vault, args[0])
 			if err != nil {
 				return err
 			}
-			var out protocol.HistoryResponse
-			if err := cl.Get("/files/history", urlValues("vault", vault, "path", args[0]), &out); err != nil {
-				return err
-			}
-			for _, e := range out.Entries {
+			for _, e := range entries {
 				del := ""
 				if e.Deleted {
 					del = " (deleted)"
@@ -190,31 +92,11 @@ func newCheckoutCmd() *cobra.Command {
 		Long:  "Restore a specific version of a vault file to disk.\n\nArguments:\n  <file>  File name in the vault",
 		Args:  expectArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			cl, _, err := authedClient()
+			res, err := actions.Checkout(vault, args[0], out, version)
 			if err != nil {
 				return err
 			}
-			vk, _, err := fetchVaultKey(cl, vault)
-			if err != nil {
-				return err
-			}
-			q := urlValues("vault", vault, "path", args[0])
-			q.Set("version", fmt.Sprintf("%d", version))
-			var pr protocol.PullResponse
-			if err := cl.Get("/files/pull", q, &pr); err != nil {
-				return err
-			}
-			plain, err := crypto.DecryptBlob(vk, pr.Ciphertext)
-			if err != nil {
-				return err
-			}
-			if out == "" {
-				out = args[0]
-			}
-			if err := os.WriteFile(out, plain, 0o600); err != nil {
-				return err
-			}
-			fmt.Printf("checked out %s v%d -> %s\n", args[0], pr.Version, out)
+			fmt.Printf("checked out %s v%d -> %s\n", args[0], res.Version, res.OutPath)
 			return nil
 		},
 	}
@@ -234,35 +116,11 @@ func newRmCmd() *cobra.Command {
 		Long:  "Soft-delete a vault file. History is retained for recovery.\n\nArguments:\n  <file>  File name in the vault to delete",
 		Args:  expectArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			cl, _, err := authedClient()
+			version, err := actions.Rm(vault, args[0])
 			if err != nil {
 				return err
 			}
-			vk, keyVersion, err := fetchVaultKey(cl, vault)
-			if err != nil {
-				return err
-			}
-			// Soft delete = push an empty, deleted-flagged version. Server marks it.
-			base, err := currentVersion(cl, vault, args[0])
-			if err != nil {
-				return fmt.Errorf("check current version: %w", err)
-			}
-			if base == 0 {
-				return fmt.Errorf("file %s not found in vault", args[0])
-			}
-			ct, err := crypto.EncryptBlob(vk, nil)
-			if err != nil {
-				return err
-			}
-			// Reuse push endpoint; deletion flag handled server-side via a dedicated
-			// field would be cleaner, but push already versions. We send a tombstone.
-			req := protocol.PushRequest{Vault: vault, File: protocol.FilePush{
-				Path: args[0], KeyVersion: keyVersion, Ciphertext: ct, BaseVersion: base, Deleted: true}}
-			var resp protocol.PushResponse
-			if err := cl.Post("/files/push", req, &resp); err != nil {
-				return err
-			}
-			fmt.Printf("soft-deleted %s (tombstone v%d)\n", args[0], resp.Version)
+			fmt.Printf("soft-deleted %s (tombstone v%d)\n", args[0], version)
 			return nil
 		},
 	}
@@ -278,15 +136,11 @@ func newAuditCmd() *cobra.Command {
 		Long:  "Show the audit log (all actions) for a vault.\n\nArguments:\n  <vault>  Vault name",
 		Args:  expectArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			cl, _, err := authedClient()
+			entries, err := actions.Audit(args[0])
 			if err != nil {
 				return err
 			}
-			var out protocol.AuditResponse
-			if err := cl.Get("/audit", urlValues("vault", args[0]), &out); err != nil {
-				return err
-			}
-			for _, e := range out.Entries {
+			for _, e := range entries {
 				fmt.Printf("%s  %-12s %-20s %s\n", e.CreatedAt, e.Action, e.Username, e.Target)
 			}
 			return nil
