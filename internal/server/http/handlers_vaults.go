@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/devsync/devsync/internal/protocol"
-	"github.com/devsync/devsync/internal/server/store"
+	"github.com/Hennnnnnn/DevWorkspace/internal/protocol"
+	"github.com/Hennnnnnn/DevWorkspace/internal/server/store"
 )
 
 func toStoreShares(in []protocol.VaultKeyShare, vaultID string) []store.KeyShare {

@@ -5,9 +5,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/devsync/devsync/internal/client/agent"
-	"github.com/devsync/devsync/internal/crypto"
-	"github.com/devsync/devsync/internal/protocol"
+	"github.com/Hennnnnnn/DevWorkspace/internal/client/agent"
+	"github.com/Hennnnnnn/DevWorkspace/internal/crypto"
+	"github.com/Hennnnnnn/DevWorkspace/internal/protocol"
 )
 
 func newCreateVaultCmd() *cobra.Command {

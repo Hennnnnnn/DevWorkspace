@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/devsync/devsync/internal/protocol"
-	"github.com/devsync/devsync/internal/server/store"
+	"github.com/Hennnnnnn/DevWorkspace/internal/protocol"
+	"github.com/Hennnnnnn/DevWorkspace/internal/server/store"
 )
 
 type ctxKey int

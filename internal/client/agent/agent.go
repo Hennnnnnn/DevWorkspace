@@ -15,9 +15,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/devsync/devsync/internal/client/config"
-	"github.com/devsync/devsync/internal/client/keystore"
-	"github.com/devsync/devsync/internal/crypto"
+	"github.com/Hennnnnnn/DevWorkspace/internal/client/config"
+	"github.com/Hennnnnnn/DevWorkspace/internal/client/keystore"
+	"github.com/Hennnnnnn/DevWorkspace/internal/crypto"
 )
 
 const sessionFile = "agent.session"

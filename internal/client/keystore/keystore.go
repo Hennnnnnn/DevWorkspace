@@ -8,8 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/devsync/devsync/internal/client/config"
-	"github.com/devsync/devsync/internal/crypto"
+	"github.com/Hennnnnnn/DevWorkspace/internal/client/config"
+	"github.com/Hennnnnnn/DevWorkspace/internal/crypto"
 )
 
 const keyFile = "device.key"

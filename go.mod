@@ -1,4 +1,4 @@
-module github.com/devsync/devsync
+module github.com/Hennnnnnn/DevWorkspace
 
 go 1.26
 

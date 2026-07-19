@@ -6,9 +6,9 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/devsync/devsync/internal/crypto"
-	"github.com/devsync/devsync/internal/protocol"
-	"github.com/devsync/devsync/internal/server/store"
+	"github.com/Hennnnnnn/DevWorkspace/internal/crypto"
+	"github.com/Hennnnnnn/DevWorkspace/internal/protocol"
+	"github.com/Hennnnnnn/DevWorkspace/internal/server/store"
 )
 
 // handleRegister creates a user+device (first device) or adds a device to an

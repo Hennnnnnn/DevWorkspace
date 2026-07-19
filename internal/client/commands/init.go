@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/devsync/devsync/internal/client/keystore"
-	"github.com/devsync/devsync/internal/crypto"
+	"github.com/Hennnnnnn/DevWorkspace/internal/client/keystore"
+	"github.com/Hennnnnnn/DevWorkspace/internal/crypto"
 )
 
 func newInitCmd() *cobra.Command {

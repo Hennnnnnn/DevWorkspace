@@ -1,7 +1,7 @@
 # devsync
 
 [![Go Version](https://img.shields.io/badge/go-1.26-blue)](go.mod)
-[![Go Report Card](https://goreportcard.com/badge/github.com/devsync/devsync)](https://goreportcard.com/report/github.com/devsync/devsync)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Hennnnnnn/DevWorkspace)](https://goreportcard.com/report/github.com/Hennnnnnn/DevWorkspace)
 
 End-to-end encrypted credential store with git/SSH-style access. Push a secret from one device, pull it on another — the server is zero-knowledge.
 
@@ -12,7 +12,7 @@ End-to-end encrypted credential store with git/SSH-style access. Push a secret f
 ### Windows (one-liner)
 
 ```powershell
-irm https://raw.githubusercontent.com/Hennnnnnn/DevWorkspaceSync/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/Hennnnnnn/DevWorkspace/main/scripts/install.ps1 | iex
 ```
 
 Installs `devsync` + `devsync-server` to `~\.devsync\bin` and adds it to your PATH.
@@ -20,15 +20,15 @@ Installs `devsync` + `devsync-server` to `~\.devsync\bin` and adds it to your PA
 ### Go (any OS)
 
 ```sh
-go install github.com/Hennnnnnn/DevWorkspaceSync/cmd/devsync@latest
-go install github.com/Hennnnnnn/DevWorkspaceSync/cmd/devsync-server@latest
+go install github.com/Hennnnnnn/DevWorkspace/cmd/devsync@latest
+go install github.com/Hennnnnnn/DevWorkspace/cmd/devsync-server@latest
 ```
 
 ### From source
 
 ```sh
-git clone https://github.com/Hennnnnnn/DevWorkspaceSync.git
-cd DevWorkspaceSync
+git clone https://github.com/Hennnnnnn/DevWorkspace.git
+cd DevWorkspace
 .\scripts\install.ps1 -Build      # Windows
 # or
 make build                        # Linux/macOS

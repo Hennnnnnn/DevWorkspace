@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/devsync/devsync/internal/protocol"
-	"github.com/devsync/devsync/internal/server/store"
+	"github.com/Hennnnnnn/DevWorkspace/internal/protocol"
+	"github.com/Hennnnnnn/DevWorkspace/internal/server/store"
 )
 
 // MaxCiphertext caps a single encrypted blob (~1 MB plaintext + overhead).

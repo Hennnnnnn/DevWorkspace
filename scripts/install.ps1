@@ -20,7 +20,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$Repo = "Hennnnnnn/DevWorkspaceSync"
+$Repo = "Hennnnnnn/DevWorkspace"
 
 # --- targets ---
 $BinDir = if ($LocalPath) { Resolve-Path $LocalPath } else { "$HOME\.devsync\bin" }

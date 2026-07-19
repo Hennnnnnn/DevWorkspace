@@ -15,11 +15,11 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib" // database/sql driver for goose
 
-	"github.com/devsync/devsync/internal/crypto"
-	"github.com/devsync/devsync/internal/db"
-	"github.com/devsync/devsync/internal/protocol"
-	srvhttp "github.com/devsync/devsync/internal/server/http"
-	"github.com/devsync/devsync/internal/server/store"
+	"github.com/Hennnnnnn/DevWorkspace/internal/crypto"
+	"github.com/Hennnnnnn/DevWorkspace/internal/db"
+	"github.com/Hennnnnnn/DevWorkspace/internal/protocol"
+	srvhttp "github.com/Hennnnnnn/DevWorkspace/internal/server/http"
+	"github.com/Hennnnnnn/DevWorkspace/internal/server/store"
 )
 
 // End-to-end test against a real Postgres. Set DEVSYNC_TEST_DATABASE_URL to run;

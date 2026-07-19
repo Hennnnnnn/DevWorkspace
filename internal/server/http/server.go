@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/devsync/devsync/internal/protocol"
-	"github.com/devsync/devsync/internal/server/store"
+	"github.com/Hennnnnnn/DevWorkspace/internal/protocol"
+	"github.com/Hennnnnnn/DevWorkspace/internal/server/store"
 )
 
 // Server holds deps and builds the HTTP handler.

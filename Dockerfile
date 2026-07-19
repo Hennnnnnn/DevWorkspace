@@ -12,4 +12,4 @@ RUN adduser -D -u 10001 devsync
 COPY --from=build /out/devsync-server /usr/local/bin/devsync-server
 USER devsync
 EXPOSE 8080
-ENTRYPOINT ["devsync-server"]
+ENTRYPOINT ["devsync-server", "serve"]

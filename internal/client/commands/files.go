@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/devsync/devsync/internal/client/api"
-	"github.com/devsync/devsync/internal/crypto"
-	"github.com/devsync/devsync/internal/protocol"
+	"github.com/Hennnnnnn/DevWorkspace/internal/client/api"
+	"github.com/Hennnnnnn/DevWorkspace/internal/crypto"
+	"github.com/Hennnnnnn/DevWorkspace/internal/protocol"
 	"github.com/spf13/cobra"
 )
 

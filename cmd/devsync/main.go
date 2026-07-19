@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/devsync/devsync/internal/client/commands"
+	"github.com/Hennnnnnn/DevWorkspace/internal/client/commands"
 )
 
 func main() {

@@ -9,9 +9,9 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/devsync/devsync/internal/client/agent"
-	"github.com/devsync/devsync/internal/client/api"
-	"github.com/devsync/devsync/internal/client/config"
+	"github.com/Hennnnnnn/DevWorkspace/internal/client/agent"
+	"github.com/Hennnnnnn/DevWorkspace/internal/client/api"
+	"github.com/Hennnnnnn/DevWorkspace/internal/client/config"
 )
 
 // authedClient loads config + the unlocked keypair from the agent and returns
