@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Hennnnnnn/DevWorkspace/internal/client/agent"
+	"github.com/Hennnnnnn/DevWorkspace/internal/client/api"
 	"github.com/Hennnnnnn/DevWorkspace/internal/client/config"
 	"github.com/Hennnnnnn/DevWorkspace/internal/client/keystore"
 )
@@ -61,9 +62,11 @@ Flags let you skip prompts if you already know the values.`,
 
 			// --- step 3: bootstrap-admin ---
 			isAdmin := false
+			var aErr error
 			if cfg.Username != "" {
-				cl, _, err := authedClient()
-				if err == nil {
+				var cl *api.Client
+				cl, _, aErr = authedClient()
+				if aErr == nil {
 					var who struct {
 						IsAdmin bool `json:"is_admin"`
 					}
@@ -82,7 +85,7 @@ Flags let you skip prompts if you already know the values.`,
 			}
 
 			// --- step 4: unlock ---
-			_, err = agent.Get()
+			_, err := agent.Get()
 			if err != nil {
 				fmt.Println("\n── Step 4: Unlock your device key ──")
 				if err := newUnlockCmd().RunE(cmd, args); err != nil {
