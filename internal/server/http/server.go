@@ -55,6 +55,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/create-vault", s.adminAuthed(s.handleCreateVault))
 	mux.HandleFunc("POST /admin/grant", s.adminAuthed(s.handleGrant))
 	mux.HandleFunc("POST /admin/revoke", s.adminAuthed(s.handleRevoke))
+	mux.HandleFunc("POST /admin/invite", s.adminAuthed(s.handleInvite))
 
 	return mux
 }

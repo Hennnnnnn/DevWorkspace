@@ -80,6 +80,11 @@ type ApproveRequest struct {
 	Shares []VaultKeyShare `json:"shares,omitempty"`
 }
 
+type InviteRequest struct {
+	Username string `json:"username"`
+	TeamName string `json:"team_name"`
+}
+
 // --- vaults / grants ---
 
 type CreateVaultRequest struct {

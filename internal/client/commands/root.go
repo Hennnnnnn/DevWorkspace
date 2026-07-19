@@ -20,6 +20,7 @@ func NewRoot() *cobra.Command {
 		newUnlockCmd(),
 		// team / vault admin
 		newCreateTeamCmd(),
+		newInviteCmd(),
 		newJoinCmd(),
 		newTeamsCmd(),
 		newMembersCmd(),

@@ -8,6 +8,30 @@ import (
 	"github.com/Hennnnnnn/DevWorkspace/internal/protocol"
 )
 
+func newInviteCmd() *cobra.Command {
+	var team string
+	cmd := &cobra.Command{
+		Use:   "invite <user> --team <team>",
+		Short: "Invite a user to a team (admin)",
+		Long:  "Add a user to a team directly. They don't need to request join first.\n\nArguments:\n  <user>  Username to invite",
+		Args:  expectArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			cl, _, err := authedClient()
+			if err != nil {
+				return err
+			}
+			if err := cl.Post("/admin/invite", protocol.InviteRequest{Username: args[0], TeamName: team}, nil); err != nil {
+				return err
+			}
+			fmt.Printf("invited %s to team %q\n", args[0], team)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&team, "team", "", "team name")
+	_ = cmd.MarkFlagRequired("team")
+	return cmd
+}
+
 func newCreateTeamCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "create-team <name>",
