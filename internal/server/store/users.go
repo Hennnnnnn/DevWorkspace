@@ -138,3 +138,16 @@ func (s *Store) CountUsers(ctx context.Context) (int, error) {
 	err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM users`).Scan(&n)
 	return n, err
 }
+
+// CountAdmins returns the number of admin users.
+func (s *Store) CountAdmins(ctx context.Context) (int, error) {
+	var n int
+	err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM users WHERE is_admin=TRUE`).Scan(&n)
+	return n, err
+}
+
+// SetUserAdmin sets a user's admin flag.
+func (s *Store) SetUserAdmin(ctx context.Context, userID string, isAdmin bool) error {
+	_, err := s.Pool.Exec(ctx, `UPDATE users SET is_admin=$2 WHERE id=$1`, userID, isAdmin)
+	return err
+}
