@@ -103,6 +103,7 @@ func NewRoot() *cobra.Command {
 		newInitCmd(),
 		newRegisterCmd(),
 		newBootstrapAdminCmd(),
+		newSetAdminCmd(),
 		newWhoAmICmd(),
 		newUnlockCmd(),
 		// team / vault admin

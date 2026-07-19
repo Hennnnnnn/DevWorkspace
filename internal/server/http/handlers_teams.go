@@ -123,6 +123,28 @@ func (s *Server) handleInvite(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "active"})
 }
 
+func (s *Server) handleSetAdmin(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Username string `json:"username"`
+	}
+	if err := json.Unmarshal(bodyOf(r), &req); err != nil || req.Username == "" {
+		writeErr(w, http.StatusBadRequest, "username required")
+		return
+	}
+	ctx := r.Context()
+	u, err := s.store.GetUserByUsername(ctx, req.Username)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if err := s.store.SetUserAdmin(ctx, u.ID, true); err != nil {
+		writeErr(w, http.StatusInternalServerError, "failed to set admin")
+		return
+	}
+	_ = s.store.Log(ctx, userOf(r).ID, deviceOf(r).ID, "", "set_admin", req.Username)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "admin"})
+}
+
 // handleApprove activates a pending user + their pending device, verifying the
 // admin-supplied fingerprint matches. Admin also submits sealed vault key shares
 // for the newly trusted device.
