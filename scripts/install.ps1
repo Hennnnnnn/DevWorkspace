@@ -3,7 +3,8 @@
 .SYNOPSIS
     Install devsync CLI and server binaries.
 .DESCRIPTION
-    Builds devsync from source, adds the bin directory to the user PATH. Requires Go.
+    Downloads pre-built binaries from GitHub releases, or builds from source as fallback.
+    Adds the bin directory to the user PATH and enables tab completion.
     One-liner: irm https://raw.githubusercontent.com/Hennnnnnn/DevWorkspace/main/scripts/install.ps1 | iex
 .PARAMETER LocalPath
     Path to a pre-built bin/ directory. Skips download & build.
@@ -16,51 +17,67 @@ param(
 $ErrorActionPreference = "Stop"
 $Repo = "Hennnnnnn/DevWorkspace"
 
-# --- targets ---
 $BinDir = if ($LocalPath) { Resolve-Path -LiteralPath $LocalPath -ErrorAction Stop } else { "$HOME\.devsync\bin" }
 $ServerUrl = "https://devworkspace.onrender.com"
 
 Write-Host "==> devsync installer" -ForegroundColor Cyan
 Write-Host "   target: $ServerUrl" -ForegroundColor Gray
 
+New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
+
 # --- 1. resolve binary source ---
 if ($LocalPath) {
     Write-Host "   using pre-built binaries from $LocalPath"
 }
 else {
-    Write-Host "   building from source" -ForegroundColor Yellow
-
-    $tmp = Join-Path $env:TMP "devsync-build-$(Get-Random)"
-    Write-Host "   cloning $Repo ..." -ForegroundColor Gray
-    git clone "https://github.com/$Repo.git" $tmp --quiet
-    if ($LASTEXITCODE -ne 0) {
-        throw "git clone failed (exit code: $LASTEXITCODE) — check network or repo access"
-    }
-
-    # Ensure output directory exists.
-    New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
-
-    Push-Location $tmp
+    # Try download from latest release first.
+    $downloaded = $false
+    $api = "https://api.github.com/repos/$Repo/releases/latest"
     try {
-        $ldflags = "-X github.com/Hennnnnnn/DevWorkspace/internal/client/config.DefaultServerURL=$ServerUrl"
+        $release = Invoke-RestMethod -Uri $api -ErrorAction Stop
+        $tag = $release.tag_name
+        $url = "https://github.com/$Repo/releases/download/$tag/devsync_windows_amd64.zip"
+        Write-Host "   downloading $tag ..." -ForegroundColor Gray
 
-        Write-Host "   building devsync.exe ..." -ForegroundColor Gray
-        go build -ldflags "$ldflags" -o "$BinDir\devsync.exe" ./cmd/devsync
-        if ($LASTEXITCODE -ne 0) {
-            throw "go build devsync failed (exit code: $LASTEXITCODE)"
-        }
-
-        Write-Host "   building devsync-server.exe ..." -ForegroundColor Gray
-        go build -ldflags "$ldflags" -o "$BinDir\devsync-server.exe" ./cmd/devsync-server
-        if ($LASTEXITCODE -ne 0) {
-            throw "go build devsync-server failed (exit code: $LASTEXITCODE)"
-        }
-    } finally {
-        Pop-Location
+        $tmp = Join-Path $env:TMP "devsync-$(Get-Random)"
+        New-Item -ItemType Directory -Path $tmp -Force | Out-Null
+        $zip = Join-Path $tmp "archive.zip"
+        Invoke-WebRequest -Uri $url -OutFile $zip
+        Expand-Archive -Path $zip -DestinationPath $tmp -Force
+        Move-Item "$tmp\devsync.exe" "$BinDir\devsync.exe" -Force -ErrorAction Stop
+        Move-Item "$tmp\devsync-server.exe" "$BinDir\devsync-server.exe" -Force -ErrorAction Stop
         Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+        $downloaded = $true
+        Write-Host "   downloaded devsync + devsync-server" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "   no release found, building from source" -ForegroundColor Yellow
     }
 
-    Write-Host "   built devsync + devsync-server" -ForegroundColor Green
+    if (-not $downloaded) {
+        $tmp = Join-Path $env:TMP "devsync-build-$(Get-Random)"
+        Write-Host "   cloning $Repo ..." -ForegroundColor Gray
+        git clone "https://github.com/$Repo.git" $tmp --quiet
+        if ($LASTEXITCODE -ne 0) {
+            throw "git clone failed (exit code: $LASTEXITCODE)"
+        }
+
+        Push-Location $tmp
+        try {
+            $ldflags = "-X github.com/Hennnnnnn/DevWorkspace/internal/client/config.DefaultServerURL=$ServerUrl"
+            Write-Host "   building devsync.exe ..." -ForegroundColor Gray
+            go build -ldflags "$ldflags" -o "$BinDir\devsync.exe" ./cmd/devsync
+            if ($LASTEXITCODE -ne 0) { throw "go build devsync failed (exit code: $LASTEXITCODE)" }
+
+            Write-Host "   building devsync-server.exe ..." -ForegroundColor Gray
+            go build -ldflags "$ldflags" -o "$BinDir\devsync-server.exe" ./cmd/devsync-server
+            if ($LASTEXITCODE -ne 0) { throw "go build devsync-server failed (exit code: $LASTEXITCODE)" }
+        } finally {
+            Pop-Location
+            Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+        }
+        Write-Host "   built devsync + devsync-server" -ForegroundColor Green
+    }
 }
 
 # --- 2. add to PATH ---

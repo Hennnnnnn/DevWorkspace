@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [windows, linux]
+        arch: [amd64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - name: Build
+        env:
+          SUFFIX: ${{ matrix.os == 'windows' && '.exe' || '' }}
+        run: |
+          go build -ldflags "-X github.com/Hennnnnnn/DevWorkspace/internal/client/config.DefaultServerURL=https://devworkspace.onrender.com" -o "devsync${{ env.SUFFIX }}" ./cmd/devsync
+          go build -ldflags "-X github.com/Hennnnnnn/DevWorkspace/internal/client/config.DefaultServerURL=https://devworkspace.onrender.com" -o "devsync-server${{ env.SUFFIX }}" ./cmd/devsync-server
+
+      - name: Archive
+        run: |
+          ${{ matrix.os == 'windows' && '7z a -tzip' || 'tar -czf' }} "devsync_${{ matrix.os }}_${{ matrix.arch }}.${{ matrix.os == 'windows' && 'zip' || 'tar.gz' }}" devsync${{ matrix.os == 'windows' && '.exe' || '' }} devsync-server${{ matrix.os == 'windows' && '.exe' || '' }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: devsync_${{ matrix.os }}_${{ matrix.arch }}
+          path: devsync_${{ matrix.os }}_${{ matrix.arch }}.${{ matrix.os == 'windows' && 'zip' || 'tar.gz' }}
+
+  release:
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
