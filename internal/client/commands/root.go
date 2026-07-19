@@ -11,6 +11,7 @@ func NewRoot() *cobra.Command {
 		SilenceErrors: true,
 	}
 	root.AddCommand(
+		newUpdateCmd(),
 		// setup / identity
 		newConfigCmd(),
 		newInitCmd(),
