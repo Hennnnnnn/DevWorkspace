@@ -1,0 +1,15 @@
+# Binaries
+/bin/
+*.exe
+/devsync
+/devsync-server
+
+# Env
+.env
+
+# Local devsync client state (never commit private keys)
+.devsync/
+
+# OS
+.DS_Store
+Thumbs.db

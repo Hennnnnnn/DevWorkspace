@@ -1,0 +1,31 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-devsync}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devsync}
+      POSTGRES_DB: ${POSTGRES_DB:-devsync}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-devsync}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    ports:
+      # Host 5433 avoids collision with a native Postgres on 5432.
+      - "5433:5432"
+
+  server:
+    build: .
+    environment:
+      DEVSYNC_DATABASE_URL: postgres://${POSTGRES_USER:-devsync}:${POSTGRES_PASSWORD:-devsync}@db:5432/${POSTGRES_DB:-devsync}?sslmode=disable
+      DEVSYNC_LISTEN_ADDR: ":8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:

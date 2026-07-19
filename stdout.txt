@@ -1,0 +1,33 @@
+devsync — end-to-end encrypted credential store
+
+Usage:
+  devsync [command]
+
+Available Commands:
+  approve      Approve a pending user after verifying their fingerprint out-of-band (admin)
+  audit        Show the audit log for a vault
+  checkout     Restore a specific version of a file to disk
+  completion   Generate the autocompletion script for the specified shell
+  config       Get or set client configuration
+  create-team  Create a team (admin)
+  create-vault Create a vault and seal its key to your devices (admin)
+  device       Manage this account's devices
+  grant        Grant a user access to a vault (admin, re-seals the key)
+  help         Help about any command
+  history      Show version history of a file
+  init         Generate a device keypair and back up the private key
+  join         Request to join a team
+  members      List team members
+  pull         Download and decrypt a file (or list vault files)
+  push         Encrypt and upload a file to a vault
+  register     Register this device's public key with the server
+  revoke       Revoke a user's vault access and rotate the key (admin)
+  rm           Soft-delete a file (history retained)
+  teams        List teams you belong to
+  unlock       Unlock the device key into the agent for a period
+  whoami       Show the current identity and device status
+
+Flags:
+  -h, --help   help for devsync
+
+Use "devsync [command] --help" for more information about a command.
