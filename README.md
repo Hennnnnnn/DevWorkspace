@@ -43,8 +43,7 @@ make up
 
 devsync init
 devsync register --username alice
-# on the server host:
-docker compose exec server devsync-server create-admin alice <fingerprint>
+devsync bootstrap-admin   # first-user, sudo-like
 
 devsync unlock
 devsync create-team eng
