@@ -10,7 +10,7 @@ endif
 # Override DEFAULT_SERVER_URL at build time, e.g.:
 #   make build DEFAULT_SERVER_URL=https://devworkspace.onrender.com
 DEFAULT_SERVER_URL ?= http://localhost:8080
-LDFLAGS = -X github.com/Hennnnnnn/DevWorkspace/internal/client/config.DefaultServerURL=$(DEFAULT_SERVER_URL)
+LDFLAGS = -X github.com/Hennnnnnn/DevWorkspace/internal/client/config.DefaultServerURL=$(DEFAULT_SERVER_URL) -X github.com/Hennnnnnn/DevWorkspace/internal/client/commands.Version=$(shell git describe --tags --always 2>/dev/null || echo dev)
 
 build-client:
 	go build -ldflags "$(LDFLAGS)" -o bin/devsync$(BINARY_SUFFIX) ./cmd/devsync

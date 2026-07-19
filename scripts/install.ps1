@@ -64,7 +64,8 @@ else {
 
         Push-Location $tmp
         try {
-            $ldflags = "-X github.com/Hennnnnnn/DevWorkspace/internal/client/config.DefaultServerURL=$ServerUrl"
+            $version = if ($tag) { $tag } else { "dev" }
+        $ldflags = "-X github.com/Hennnnnnn/DevWorkspace/internal/client/config.DefaultServerURL=$ServerUrl -X github.com/Hennnnnnn/DevWorkspace/internal/client/commands.Version=$version"
             Write-Host "   building devsync.exe ..." -ForegroundColor Gray
             go build -ldflags "$ldflags" -o "$BinDir\devsync.exe" ./cmd/devsync
             if ($LASTEXITCODE -ne 0) { throw "go build devsync failed (exit code: $LASTEXITCODE)" }

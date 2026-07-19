@@ -26,8 +26,8 @@ jobs:
           GOARCH: ${{ matrix.arch }}
           SUFFIX: ${{ matrix.os == 'windows' && '.exe' || '' }}
         run: |
-          go build -ldflags "-X github.com/Hennnnnnn/DevWorkspace/internal/client/config.DefaultServerURL=https://devworkspace.onrender.com" -o "devsync${{ env.SUFFIX }}" ./cmd/devsync
-          go build -ldflags "-X github.com/Hennnnnnn/DevWorkspace/internal/client/config.DefaultServerURL=https://devworkspace.onrender.com" -o "devsync-server${{ env.SUFFIX }}" ./cmd/devsync-server
+          go build -ldflags "-X github.com/Hennnnnnn/DevWorkspace/internal/client/config.DefaultServerURL=https://devworkspace.onrender.com -X github.com/Hennnnnnn/DevWorkspace/internal/client/commands.Version=${{ github.ref_name }}" -o "devsync${{ env.SUFFIX }}" ./cmd/devsync
+          go build -ldflags "-X github.com/Hennnnnnn/DevWorkspace/internal/client/config.DefaultServerURL=https://devworkspace.onrender.com -X github.com/Hennnnnnn/DevWorkspace/internal/client/commands.Version=${{ github.ref_name }}" -o "devsync-server${{ env.SUFFIX }}" ./cmd/devsync-server
 
       - name: Archive
         run: |
