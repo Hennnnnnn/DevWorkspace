@@ -17,7 +17,7 @@ $ErrorActionPreference = "Stop"
 $Repo = "Hennnnnnn/DevWorkspace"
 
 # --- targets ---
-$BinDir = if ($LocalPath) { Resolve-Path $LocalPath } else { "$HOME\.devsync\bin" }
+$BinDir = if ($LocalPath) { Resolve-Path -LiteralPath $LocalPath -ErrorAction Stop } else { "$HOME\.devsync\bin" }
 $ServerUrl = "https://devworkspace.onrender.com"
 
 Write-Host "==> devsync installer" -ForegroundColor Cyan
@@ -29,20 +29,37 @@ if ($LocalPath) {
 }
 else {
     Write-Host "   building from source" -ForegroundColor Yellow
+
     $tmp = Join-Path $env:TMP "devsync-build-$(Get-Random)"
-    git clone "https://github.com/$Repo.git" $tmp 2>&1 | Out-Null
+    Write-Host "   cloning $Repo ..." -ForegroundColor Gray
+    git clone "https://github.com/$Repo.git" $tmp --quiet
+    if ($LASTEXITCODE -ne 0) {
+        throw "git clone failed (exit code: $LASTEXITCODE) — check network or repo access"
+    }
+
+    # Ensure output directory exists.
+    New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
+
     Push-Location $tmp
     try {
-        $script:buildOk = $false
         $ldflags = "-X github.com/Hennnnnnn/DevWorkspace/internal/client/config.DefaultServerURL=$ServerUrl"
-        go build -ldflags "$ldflags" -o "$BinDir\devsync.exe" ./cmd/devsync 2>&1
-        go build -ldflags "$ldflags" -o "$BinDir\devsync-server.exe" ./cmd/devsync-server 2>&1
-        $script:buildOk = $true
+
+        Write-Host "   building devsync.exe ..." -ForegroundColor Gray
+        go build -ldflags "$ldflags" -o "$BinDir\devsync.exe" ./cmd/devsync
+        if ($LASTEXITCODE -ne 0) {
+            throw "go build devsync failed (exit code: $LASTEXITCODE)"
+        }
+
+        Write-Host "   building devsync-server.exe ..." -ForegroundColor Gray
+        go build -ldflags "$ldflags" -o "$BinDir\devsync-server.exe" ./cmd/devsync-server
+        if ($LASTEXITCODE -ne 0) {
+            throw "go build devsync-server failed (exit code: $LASTEXITCODE)"
+        }
     } finally {
         Pop-Location
         Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
     }
-    if (-not $script:buildOk) { throw "build failed" }
+
     Write-Host "   built devsync + devsync-server" -ForegroundColor Green
 }
 
@@ -51,7 +68,6 @@ $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($userPath -notlike "*$BinDir*") {
     $newPath = if ($userPath) { "$userPath;$BinDir" } else { "$BinDir" }
     [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
-    # also update current session
     $env:Path += ";$BinDir"
     Write-Host "   added $BinDir to PATH (user)" -ForegroundColor Green
 } else {
@@ -63,7 +79,7 @@ try {
     $v = & devsync --help 2>&1 | Select-Object -First 1
     Write-Host "   devsync ready: $v" -ForegroundColor Green
 } catch {
-    Write-Host "   installed but start a new terminal to pick up PATH" -ForegroundColor Yellow
+    Write-Host "   installed — start a new terminal, then type 'devsync --help'" -ForegroundColor Yellow
 }
 
 Write-Host ""
