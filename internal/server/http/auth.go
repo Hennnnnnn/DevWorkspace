@@ -54,7 +54,7 @@ func (s *Server) authed(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		msg := protocol.SigningString(r.Method, r.URL.Path, protocol.BodyHash(body), ts)
+		msg := protocol.SigningString(r.Method, r.URL.RequestURI(), protocol.BodyHash(body), ts)
 		if !ed25519.Verify(ed25519.PublicKey(device.SignPubKey), msg, decodeSig(sig)) {
 			writeErr(w, http.StatusUnauthorized, "bad signature")
 			return

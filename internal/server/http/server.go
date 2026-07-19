@@ -97,6 +97,14 @@ func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "username and fingerprint required")
 		return
 	}
+	if len(req.Username) > 255 {
+		writeErr(w, http.StatusBadRequest, "username too long (max 255)")
+		return
+	}
+	if len(req.Fingerprint) > 200 {
+		writeErr(w, http.StatusBadRequest, "fingerprint too long")
+		return
+	}
 
 	ctx := r.Context()
 	n, err := s.store.CountAdmins(ctx)

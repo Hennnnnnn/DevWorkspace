@@ -24,6 +24,14 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "missing/invalid fields")
 		return
 	}
+	if len(req.Username) > 255 {
+		writeErr(w, http.StatusBadRequest, "username too long (max 255)")
+		return
+	}
+	if len(req.DeviceName) > 255 {
+		writeErr(w, http.StatusBadRequest, "device name too long (max 255)")
+		return
+	}
 	// Verify the fingerprint matches the submitted signing key (no spoofing).
 	if crypto.Fingerprint(ed25519.PublicKey(req.SignPubKey)) != req.Fingerprint {
 		writeErr(w, http.StatusBadRequest, "fingerprint mismatch")

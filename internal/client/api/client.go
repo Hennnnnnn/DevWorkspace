@@ -50,13 +50,14 @@ func (c *Client) doSigned(method, path string, query url.Values, body any, out a
 		bodyBytes = b
 	}
 	ts := time.Now().Unix()
-	msg := protocol.SigningString(method, path, protocol.BodyHash(bodyBytes), ts)
+	signPath := path
+	if len(query) > 0 {
+		signPath = path + "?" + query.Encode()
+	}
+	msg := protocol.SigningString(method, signPath, protocol.BodyHash(bodyBytes), ts)
 	sig := crypto.Sign(c.kp.SignPriv, msg)
 
-	u := c.baseURL + path
-	if len(query) > 0 {
-		u += "?" + query.Encode()
-	}
+	u := c.baseURL + signPath
 	req, err := http.NewRequest(method, u, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)

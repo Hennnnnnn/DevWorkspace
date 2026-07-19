@@ -19,6 +19,9 @@ jobs:
       - name: Build
         run: go build ./cmd/devsync && go build ./cmd/devsync-server
 
+      - name: Vet
+        run: go vet ./...
+
       - name: Test
         run: go test ./...
 

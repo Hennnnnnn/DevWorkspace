@@ -62,6 +62,8 @@ func runServe() {
 		Addr:              cfg.ListenAddr,
 		Handler:           httpsrv.New(st).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 	go func() {
 		log.Printf("listening on %s", cfg.ListenAddr)

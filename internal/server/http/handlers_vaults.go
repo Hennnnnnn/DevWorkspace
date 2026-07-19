@@ -29,6 +29,14 @@ func (s *Server) handleCreateVault(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "team + name required")
 		return
 	}
+	if len(req.Name) > 255 {
+		writeErr(w, http.StatusBadRequest, "vault name too long (max 255)")
+		return
+	}
+	if len(req.Team) > 255 {
+		writeErr(w, http.StatusBadRequest, "team name too long (max 255)")
+		return
+	}
 	ctx := r.Context()
 	t, err := s.store.GetTeamByName(ctx, req.Team)
 	if err != nil {
