@@ -82,13 +82,17 @@ func updateDev() error {
 	if err != nil {
 		return fmt.Errorf("get executable path: %w", err)
 	}
-	src := filepath.Join(tmp, "devsync")
-	if runtime.GOOS == "windows" {
-		src += ".exe"
+	if p, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = p
 	}
+
+	src := filepath.Join(tmp, "devsync")
 	f, err := os.Open(src)
 	if err != nil {
-		return fmt.Errorf("open built binary: %w", err)
+		f, err = os.Open(src + ".exe")
+		if err != nil {
+			return fmt.Errorf("open built binary (tried %s and .exe): %w", src, err)
+		}
 	}
 	defer f.Close()
 	if err := writeAtomic(exe, f, 0755); err != nil {
@@ -226,6 +230,7 @@ func writeAtomic(dst string, src io.Reader, mode os.FileMode) error {
 		return fmt.Errorf("close temp: %w", err)
 	}
 	if err := os.Rename(tmp, dst); err != nil {
+		os.Rename(old, dst)
 		return fmt.Errorf("replace: %w", err)
 	}
 	os.Remove(old)
