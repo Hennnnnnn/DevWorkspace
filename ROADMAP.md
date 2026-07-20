@@ -7,6 +7,8 @@
 **Server model:** self-host first (single binary), hosted `devworkspace.onrender.com` as a try-it-now demo only.
 
 > Note: `PLAN.md` covers the (completed) TUI build. This file is the next phase — the road to actual users.
+>
+> **Progress:** Items #1, #2 shipped. Next: #3 (invite tokens).
 
 ---
 
@@ -21,26 +23,27 @@
 
 ## Work items (priority order — by impact/dependency)
 
-### 1. Server single-binary (SQLite default, Postgres opt-in)
+### 1. Server single-binary (SQLite default, Postgres opt-in) ✅ DONE
 
 **Why:** Postgres + Docker requirement is the biggest adoption funnel killer for "just let me try it." Also a clean architecture story for interviews (one interface, two backends).
 
-- Extract `Store` (currently concrete struct in `internal/server/store/postgres.go`) into an interface.
-- Implement a SQLite backend behind that interface.
-- Make SQLite the default: `devsync-server serve` → single binary, DB = one file, no Docker/Postgres needed.
-- Keep Postgres as opt-in via `DEVSYNC_DATABASE_URL`.
-- Migrations must run against both backends (Goose already in `internal/db`).
+- ✅ Extract `Store` into dialect-based struct (not interface — pragmatic: `rebind()` + `forUpdate()` handle 5% divergence).
+- ✅ Implement SQLite backend: `modernc.org/sqlite` (pure Go, no CGo), `SetMaxOpenConns(1)`, pragmas (FK, WAL, busy_timeout).
+- ✅ SQLite default: `devsync-server serve` → single binary, DB = `UserConfigDir/devsync/devsync.db`, no Docker/Postgres needed.
+- ✅ Postgres opt-in via `DEVSYNC_DATABASE_URL` with `postgres://` prefix.
+- ✅ Migrations split: `migrations/postgres/` + `migrations/sqlite/`, Goose handles both.
+- ✅ Integration tests default to SQLite (`t.TempDir()`), Postgres opt-in via `DEVSYNC_TEST_DATABASE_URL`.
 
-**Done when:** a fresh machine runs the server with one command and no external DB.
+**Shipped in:** `592fdf5` (2025-07-20).
 
-### 2. Fix solo onboarding (small)
+### 2. Fix solo onboarding (small) ✅ DONE
 
 **Why:** `devsync setup` already exists and covers ~80% of solo onboarding, but step 3 only *prints* the `bootstrap-admin` instruction instead of running it (`internal/client/commands/setup.go` ~L76–83). The solo user has to drop out, run it manually, and re-enter — funnel leak.
 
-- Auto-run `bootstrap-admin` inside `setup` when the user is the first/only user.
-- Detect first-user safely (guard so it no-ops if an admin already exists).
+- ✅ Detect first-user safely (guard so it no-ops if an admin already exists) — shipped in `25361d6`.
+- ✅ Auto-run `bootstrap-admin` inside `setup` when the user is the first/only user.
 
-**Done when:** a brand-new solo user goes from zero to first `push` without leaving `devsync setup`. ~15 min of work.
+**Pending UX polish:** `bootstrap-admin` and `unlock` (step 4) both prompt for passphrase separately — user types it twice. Refactor to share passphrase across steps if UX complaint arises.
 
 ### 3. Invite token flow (replaces manual fingerprint exchange)
 
@@ -88,9 +91,9 @@
 
 If momentum matters more than strict impact order:
 
-`2 (≈15 min) → 1 → 3 → 5 → 4`
+`2 ✅ → 1 ✅ → 3 → 5 → 4`
 
-Ships a visible improvement immediately, defers the heaviest item (recovery) to last.
+Items #1, #2 shipped. Next: #3 (invite tokens).
 
 *(Ordering decision still open — see bottom.)*
 
@@ -114,4 +117,4 @@ Recorded so they are not forgotten, deliberately deferred:
 
 ## Open decisions
 
-- [ ] **Execution order:** by-impact (`1→5`) vs quick-win-first (`2→1→3→5→4`).
+- [ ] **Execution order:** by-impact (`1 ✅ → 2 → 3 → 4 → 5`) vs quick-win-first (`2 → 3 → 5 → 4`). Item #1 done either way.
