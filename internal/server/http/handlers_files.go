@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -104,7 +105,8 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
 	versions, err := s.store.History(r.Context(), v.ID, path)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "failed to retrieve file history")
+		log.Printf("file history error (vault=%q path=%q): %v", v.ID, path, err)
+		writeErr(w, http.StatusInternalServerError, "history: "+err.Error())
 		return
 	}
 	out := protocol.HistoryResponse{}
