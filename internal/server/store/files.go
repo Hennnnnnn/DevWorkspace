@@ -116,7 +116,7 @@ func (s *Store) ListFiles(ctx context.Context, vaultID string) ([]FileMeta, erro
 func (s *Store) History(ctx context.Context, vaultID, path string) ([]FileVersion, error) {
 	rows, err := s.db.QueryContext(ctx, s.rebind(
 		`SELECT fv.version, fv.key_version, fv.size_bytes,
-		        COALESCE(fv.author_device_id,''), fv.deleted, fv.created_at
+		        fv.author_device_id, fv.deleted, fv.created_at
 		 FROM file_versions fv
 		 JOIN files f ON f.id = fv.file_id
 		 WHERE f.vault_id=? AND f.path=?
@@ -128,8 +128,12 @@ func (s *Store) History(ctx context.Context, vaultID, path string) ([]FileVersio
 	var out []FileVersion
 	for rows.Next() {
 		var fv FileVersion
-		if err := rows.Scan(&fv.Version, &fv.KeyVersion, &fv.SizeBytes, &fv.AuthorDevice, &fv.Deleted, &fv.CreatedAt); err != nil {
+		var author *string
+		if err := rows.Scan(&fv.Version, &fv.KeyVersion, &fv.SizeBytes, &author, &fv.Deleted, &fv.CreatedAt); err != nil {
 			return nil, err
+		}
+		if author != nil {
+			fv.AuthorDevice = *author
 		}
 		out = append(out, fv)
 	}
