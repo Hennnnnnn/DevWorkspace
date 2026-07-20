@@ -70,7 +70,12 @@ func updateDev() error {
 		serverURL = config.DefaultServerURL
 	}
 	ldflags := fmt.Sprintf("-X github.com/Hennnnnnn/DevWorkspace/internal/client/config.DefaultServerURL=%s -X github.com/Hennnnnnn/DevWorkspace/internal/client/commands.Version=%s", serverURL, sha)
-	build := exec.Command("go", "build", "-ldflags", ldflags, "-o", "devsync", "./cmd/devsync")
+	binName := "devsync"
+	if runtime.GOOS == "windows" {
+		binName += ".exe"
+	}
+	outPath := filepath.Join(tmp, binName)
+	build := exec.Command("go", "build", "-ldflags", ldflags, "-o", outPath, "./cmd/devsync")
 	build.Dir = tmp
 	if out, err := build.CombinedOutput(); err != nil {
 		return fmt.Errorf("go build: %s: %w", strings.TrimSpace(string(out)), err)
@@ -86,13 +91,16 @@ func updateDev() error {
 		exe = p
 	}
 
-	src := filepath.Join(tmp, "devsync")
-	f, err := os.Open(src)
+	f, err := os.Open(outPath)
 	if err != nil {
-		f, err = os.Open(src + ".exe")
-		if err != nil {
-			return fmt.Errorf("open built binary (tried %s and .exe): %w", src, err)
+		if entries, e := os.ReadDir(tmp); e == nil {
+			names := make([]string, 0, len(entries))
+			for _, ent := range entries {
+				names = append(names, ent.Name())
+			}
+			return fmt.Errorf("open built binary %s (tmp contents: %s): %w", outPath, strings.Join(names, ", "), err)
 		}
+		return fmt.Errorf("open built binary %s: %w", outPath, err)
 	}
 	defer f.Close()
 	if err := writeAtomic(exe, f, 0755); err != nil {
