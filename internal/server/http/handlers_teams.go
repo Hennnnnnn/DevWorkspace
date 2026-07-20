@@ -173,8 +173,7 @@ func (s *Server) handleApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Activate any pending team memberships for this user.
-	_, _ = s.store.Pool.Exec(ctx,
-		`UPDATE team_members SET status='active' WHERE user_id=$1 AND status='pending'`, user.ID)
+	_ = s.store.ActivatePendingMemberships(ctx, user.ID)
 
 	if len(req.Shares) > 0 {
 		shares := make([]store.KeyShare, 0, len(req.Shares))

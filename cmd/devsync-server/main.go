@@ -13,8 +13,6 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/jackc/pgx/v5/stdlib" // database/sql driver for goose
-
 	"github.com/Hennnnnnn/DevWorkspace/internal/crypto"
 	"github.com/Hennnnnnn/DevWorkspace/internal/db"
 	"github.com/Hennnnnnn/DevWorkspace/internal/server/config"
@@ -42,10 +40,10 @@ func mustStore(ctx context.Context) (*store.Store, *config.Config) {
 	if err != nil {
 		log.Fatalf("config: %v", err)
 	}
-	if err := db.Migrate(ctx, cfg.DatabaseURL); err != nil {
+	if err := db.Migrate(ctx, cfg.Driver, cfg.DatabaseURL); err != nil {
 		log.Fatalf("migrate: %v", err)
 	}
-	st, err := store.New(ctx, cfg.DatabaseURL)
+	st, err := store.New(ctx, cfg.Driver, cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("store: %v", err)
 	}
@@ -114,7 +112,7 @@ func runCreateAdmin(args []string) {
 	if err := st.SetDeviceStatus(ctx, device.ID, "active"); err != nil {
 		log.Fatalf("activate device: %v", err)
 	}
-	if _, err := st.Pool.Exec(ctx, `UPDATE users SET is_admin=TRUE WHERE id=$1`, user.ID); err != nil {
+	if err := st.SetUserAdmin(ctx, user.ID, true); err != nil {
 		log.Fatalf("set admin: %v", err)
 	}
 	fmt.Printf("admin %q activated (device %s)\n", username, base64.RawStdEncoding.EncodeToString([]byte(device.ID))[:8])

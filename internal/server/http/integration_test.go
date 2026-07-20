@@ -9,11 +9,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
-
-	_ "github.com/jackc/pgx/v5/stdlib" // database/sql driver for goose
 
 	"github.com/Hennnnnnn/DevWorkspace/internal/crypto"
 	"github.com/Hennnnnnn/DevWorkspace/internal/db"
@@ -22,29 +21,25 @@ import (
 	"github.com/Hennnnnnn/DevWorkspace/internal/server/store"
 )
 
-// End-to-end test against a real Postgres. Set DEVSYNC_TEST_DATABASE_URL to run;
-// skipped otherwise so the default `go test ./...` needs no database.
+// End-to-end test. Runs on a fresh SQLite file by default (no external DB).
+// Set DEVSYNC_TEST_DATABASE_URL to a postgres:// DSN to run against Postgres too.
 func TestFullLifecycle(t *testing.T) {
-	dsn := os.Getenv("DEVSYNC_TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("set DEVSYNC_TEST_DATABASE_URL to run integration test")
+	driver, dsn := "sqlite", ""
+	if pg := os.Getenv("DEVSYNC_TEST_DATABASE_URL"); pg != "" {
+		driver, dsn = "pgx", pg
+	} else {
+		path := filepath.Join(t.TempDir(), "test.db")
+		dsn = "file:" + path + "?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
 	}
 	ctx := context.Background()
-	if err := db.Migrate(ctx, dsn); err != nil {
+	if err := db.Migrate(ctx, driver, dsn); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	st, err := store.New(ctx, dsn)
+	st, err := store.New(ctx, driver, dsn)
 	if err != nil {
 		t.Fatalf("store: %v", err)
 	}
 	defer st.Close()
-	// Clean slate.
-	for _, tbl := range []string{"audit_log", "file_versions", "files", "vault_key_shares",
-		"vault_grants", "vaults", "team_members", "teams", "devices", "users"} {
-		if _, err := st.Pool.Exec(ctx, "DELETE FROM "+tbl); err != nil {
-			t.Fatalf("clean %s: %v", tbl, err)
-		}
-	}
 
 	ts := httptest.NewServer(srvhttp.New(st).Handler())
 	defer ts.Close()
@@ -60,7 +55,7 @@ func TestFullLifecycle(t *testing.T) {
 	_ = st.SetUserStatus(ctx, adminUser.ID, "active")
 	devs, _ := st.ListDevices(ctx, adminUser.ID)
 	_ = st.SetDeviceStatus(ctx, devs[0].ID, "active")
-	_, _ = st.Pool.Exec(ctx, `UPDATE users SET is_admin=TRUE WHERE id=$1`, adminUser.ID)
+	_ = st.SetUserAdmin(ctx, adminUser.ID, true)
 
 	// whoami works and shows admin+active.
 	var who protocol.WhoAmIResponse

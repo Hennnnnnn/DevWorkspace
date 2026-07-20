@@ -2,10 +2,9 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
-
-	"github.com/jackc/pgx/v5"
 )
 
 // ErrVersionConflict signals an optimistic-lock failure (stale push).
@@ -14,25 +13,25 @@ var ErrVersionConflict = errors.New("version conflict: pull first")
 // PushFile appends a new version with optimistic locking. baseVersion must equal
 // the file's current latest_version (0 for a brand-new file). Returns new version.
 func (s *Store) PushFile(ctx context.Context, vaultID, path string, keyVersion, baseVersion int, ciphertext []byte, sizeBytes int, authorDeviceID string, deleted bool) (int, error) {
-	tx, err := s.Pool.Begin(ctx)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
 	}
-	defer tx.Rollback(ctx)
+	defer tx.Rollback()
 
 	var fileID string
 	var latest int
-	err = tx.QueryRow(ctx,
-		`SELECT id, latest_version FROM files WHERE vault_id=$1 AND path=$2 FOR UPDATE`,
+	err = tx.QueryRowContext(ctx, s.rebind(
+		`SELECT id, latest_version FROM files WHERE vault_id=? AND path=?`+s.forUpdate()),
 		vaultID, path).Scan(&fileID, &latest)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, sql.ErrNoRows) {
 		if baseVersion != 0 {
 			return 0, ErrVersionConflict
 		}
-		err = tx.QueryRow(ctx,
-			`INSERT INTO files (vault_id, path, latest_version) VALUES ($1,$2,0) RETURNING id`,
-			vaultID, path).Scan(&fileID)
-		if err != nil {
+		fileID = newID()
+		if _, err = tx.ExecContext(ctx, s.rebind(
+			`INSERT INTO files (id, vault_id, path, latest_version) VALUES (?,?,?,0)`),
+			fileID, vaultID, path); err != nil {
 			return 0, fmt.Errorf("insert file: %w", err)
 		}
 		latest = 0
@@ -45,28 +44,28 @@ func (s *Store) PushFile(ctx context.Context, vaultID, path string, keyVersion, 
 	}
 	newVersion := latest + 1
 
-	if _, err := tx.Exec(ctx,
+	if _, err := tx.ExecContext(ctx, s.rebind(
 		`INSERT INTO file_versions (file_id, version, key_version, ciphertext, size_bytes, author_device_id, deleted)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+		 VALUES (?,?,?,?,?,?,?)`),
 		fileID, newVersion, keyVersion, ciphertext, sizeBytes, authorDeviceID, deleted); err != nil {
 		return 0, fmt.Errorf("insert version: %w", err)
 	}
-	if _, err := tx.Exec(ctx,
-		`UPDATE files SET latest_version=$2, deleted=$3 WHERE id=$1`,
-		fileID, newVersion, deleted); err != nil {
+	if _, err := tx.ExecContext(ctx, s.rebind(
+		`UPDATE files SET latest_version=?, deleted=? WHERE id=?`),
+		newVersion, deleted, fileID); err != nil {
 		return 0, err
 	}
-	return newVersion, tx.Commit(ctx)
+	return newVersion, tx.Commit()
 }
 
 // GetFileVersion returns a specific version (or latest if version==0).
 func (s *Store) GetFileVersion(ctx context.Context, vaultID, path string, version int) (*FileVersion, error) {
 	var fileID string
 	var latest int
-	err := s.Pool.QueryRow(ctx,
-		`SELECT id, latest_version FROM files WHERE vault_id=$1 AND path=$2`, vaultID, path).
+	err := s.db.QueryRowContext(ctx, s.rebind(
+		`SELECT id, latest_version FROM files WHERE vault_id=? AND path=?`), vaultID, path).
 		Scan(&fileID, &latest)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
@@ -77,11 +76,11 @@ func (s *Store) GetFileVersion(ctx context.Context, vaultID, path string, versio
 	}
 	var fv FileVersion
 	var author *string
-	err = s.Pool.QueryRow(ctx,
+	err = s.db.QueryRowContext(ctx, s.rebind(
 		`SELECT version, key_version, ciphertext, size_bytes, author_device_id, deleted, created_at
-		 FROM file_versions WHERE file_id=$1 AND version=$2`, fileID, version).
+		 FROM file_versions WHERE file_id=? AND version=?`), fileID, version).
 		Scan(&fv.Version, &fv.KeyVersion, &fv.Ciphertext, &fv.SizeBytes, &author, &fv.Deleted, &fv.CreatedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
@@ -95,9 +94,9 @@ func (s *Store) GetFileVersion(ctx context.Context, vaultID, path string, versio
 
 // ListFiles returns file metadata for a vault (includes soft-deleted).
 func (s *Store) ListFiles(ctx context.Context, vaultID string) ([]FileMeta, error) {
-	rows, err := s.Pool.Query(ctx,
+	rows, err := s.db.QueryContext(ctx, s.rebind(
 		`SELECT id, vault_id, path, latest_version, deleted FROM files
-		 WHERE vault_id=$1 ORDER BY path`, vaultID)
+		 WHERE vault_id=? ORDER BY path`), vaultID)
 	if err != nil {
 		return nil, err
 	}
@@ -115,13 +114,13 @@ func (s *Store) ListFiles(ctx context.Context, vaultID string) ([]FileMeta, erro
 
 // History returns all versions of a file, newest first.
 func (s *Store) History(ctx context.Context, vaultID, path string) ([]FileVersion, error) {
-	rows, err := s.Pool.Query(ctx,
+	rows, err := s.db.QueryContext(ctx, s.rebind(
 		`SELECT fv.version, fv.key_version, fv.size_bytes,
-		        COALESCE(fv.author_device_id::text,''), fv.deleted, fv.created_at
+		        COALESCE(fv.author_device_id,''), fv.deleted, fv.created_at
 		 FROM file_versions fv
 		 JOIN files f ON f.id = fv.file_id
-		 WHERE f.vault_id=$1 AND f.path=$2
-		 ORDER BY fv.version DESC`, vaultID, path)
+		 WHERE f.vault_id=? AND f.path=?
+		 ORDER BY fv.version DESC`), vaultID, path)
 	if err != nil {
 		return nil, err
 	}

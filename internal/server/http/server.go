@@ -63,7 +63,7 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
-	if err := s.store.Pool.Ping(r.Context()); err != nil {
+	if err := s.store.Ping(r.Context()); err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "db_down"})
 		return
 	}
