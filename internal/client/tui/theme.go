@@ -15,4 +15,9 @@ var (
 	warningStyle   = lipgloss.NewStyle().Foreground(warningColor)
 	infoStyle      = lipgloss.NewStyle().Foreground(infoColor)
 	selectionStyle = lipgloss.NewStyle().Foreground(selectionColor).Bold(true)
+
+	// Header styles
+	logoStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true) // cyan bold
+	taglineStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Faint(true) // gray
+	separatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Faint(true) // gray
 )

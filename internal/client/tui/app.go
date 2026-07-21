@@ -48,8 +48,13 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		// Propagate the size to every view on the stack, not just the top
 		// one, so views resize correctly when popped back into view.
+		h := msg.Height - headerHeight
+		if h < 1 {
+			h = 1
+		}
+		adjusted := tea.WindowSizeMsg{Width: msg.Width, Height: h}
 		for i, v := range m.stack {
-			updated, _ := v.Update(msg)
+			updated, _ := v.Update(adjusted)
 			m.stack[i] = updated
 		}
 		return m, nil
@@ -71,7 +76,11 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case pushMsg:
 		if m.width > 0 && m.height > 0 {
-			updated, _ := msg.model.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+			h := m.height - headerHeight
+			if h < 1 {
+				h = 1
+			}
+			updated, _ := msg.model.Update(tea.WindowSizeMsg{Width: m.width, Height: h})
 			msg.model = updated
 		}
 		m.stack = append(m.stack, msg.model)
@@ -85,7 +94,11 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case replaceViewMsg:
 		if m.width > 0 && m.height > 0 {
-			updated, _ := msg.model.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+			h := m.height - headerHeight
+			if h < 1 {
+				h = 1
+			}
+			updated, _ := msg.model.Update(tea.WindowSizeMsg{Width: m.width, Height: h})
 			msg.model = updated
 		}
 		m.stack = []tea.Model{msg.model}
@@ -98,7 +111,7 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m rootModel) View() string {
-	return m.top().View()
+	return RenderHeader(m.width) + m.top().View()
 }
 
 // Run starts the TUI.

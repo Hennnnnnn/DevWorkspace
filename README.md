@@ -1,11 +1,18 @@
-# devsync
+```
+██████╗ ███████╗██╗   ██╗███████╗██╗   ██╗███╗   ██╗ ██████╗
+██╔══██╗██╔════╝██║   ██║██╔════╝╚██╗ ██╔╝████╗  ██║██╔════╝
+██║  ██║█████╗  ██║   ██║███████╗ ╚████╔╝ ██╔██╗ ██║██║
+██║  ██║██╔══╝  ╚██╗ ██╔╝╚════██║  ╚██╔╝  ██║╚██╗██║██║
+██████╔╝███████╗ ╚████╔╝ ███████║   ██║   ██║ ╚████║╚██████╗
+╚═════╝ ╚══════╝  ╚═══╝  ╚══════╝   ╚═╝   ╚═╝  ╚═══╝ ╚═════╝
+```
 
 [![Go Version](https://img.shields.io/badge/go-1.26-blue)](go.mod)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Hennnnnnn/DevWorkspace)](https://goreportcard.com/report/github.com/Hennnnnnn/DevWorkspace)
 
 End-to-end encrypted credential store. Push a secret from one device, pull it on another. The server sees only ciphertext — zero-knowledge.
 
-**`devsync`** (no arguments) launches an interactive TUI with drill-down navigation. `devsync <subcommand>` keeps the full CLI for scripts.
+**`devsync`** (no arguments) launches an interactive TUI with drill-down navigation. First run drops you into a setup wizard — no CLI commands or vault/team concepts required. `devsync <subcommand>` keeps the full CLI for scripts.
 
 ---
 
@@ -43,7 +50,11 @@ go install -ldflags '-X github.com/Hennnnnnn/DevWorkspace/internal/client/config
 
 ## Quickstart: solo user
 
-Set up your first vault and push a secret in 5 commands:
+### TUI (recommended)
+
+Run `devsync` with no arguments. First run launches a setup wizard: pick a username + passphrase, save the 24-word recovery phrase, done. The wizard runs `init` → `register` → `bootstrap-admin` → `unlock` and auto-creates a `personal` team + `main` vault behind the scenes — you land straight in the main menu ready to push/pull.
+
+### CLI
 
 ```powershell
 # 1. Generate a device keypair
@@ -64,24 +75,23 @@ devsync create-vault secrets --team eng
 devsync push .env --vault secrets
 ```
 
-Run `devsync pull .env --vault secrets` to decrypt and download.
-
-After setup, run `devsync` (no arguments) for the interactive TUI.
+Run `devsync pull .env --vault secrets` to decrypt and download. `--vault` is optional on push/pull/history/checkout/rm — omitted, it auto-detects when you belong to exactly one vault.
 
 ---
 
 ## Interactive TUI
 
-Run `devsync` with no arguments in a terminal to launch the Bubble Tea TUI:
+Run `devsync` with no arguments in a terminal. No keystore yet → the setup wizard. Otherwise, straight to the Bubble Tea TUI:
 
 | View | Keys | What it does |
 |------|------|-------------|
+| **Wizard** (first run) | tab / enter | Username + passphrase → recovery phrase → auto register/unlock/team/vault |
 | **Top menu** | enter | Select Vaults / Teams / Devices / Audit |
-| **Vaults** | enter → files | Browse vaults, drill into file list |
+| **Vaults** | enter → files | Browse vaults, drill into file list (filtered to your active teams) |
 | **Files** | p / u / d / enter | Pull, push (file picker), delete, version history |
 | **History** | c | Checkout a specific version |
-| **Teams** | enter → members, c / j / d | View members, create, join, delete team |
-| **Members** | a / p | Approve pending user, toggle pending filter |
+| **Teams** | enter → members, c / j / d | Joined / pending / not-joined sections; view members, create, join, delete |
+| **Members** | a / p | Approve pending user (confirm fingerprint → pick vaults → grant in one flow), toggle pending filter |
 | **Devices** | enter | Revoke a device (with confirm) |
 | **Audit** | enter → vault | Read-only audit log per vault |
 
@@ -105,9 +115,12 @@ devsync create-vault secrets --team eng
 # 3. Push your secret
 devsync push .env --vault secrets
 
-# 4. Approve + grant access to a teammate
+# 4. Approve a teammate — verify fingerprint out-of-band first
 devsync approve budi --fingerprint SHA256:xxxx   # fp from teammate's devsync init
-devsync grant budi --vault secrets
+# re-shares every vault key the admin holds to budi's device automatically
+
+# Or in the TUI: Teams → members → a on a pending user →
+# confirm fingerprint → pick which vaults to grant → done in one step
 ```
 
 ### Teammate (budi)
@@ -121,7 +134,7 @@ devsync unlock
 devsync pull .env --vault secrets
 ```
 
-Budi's device gets the vault key sealed to it during `grant`. He can now decrypt the file.
+Budi's device gets the vault key sealed to it during `approve` (or a manual `grant`). He can now decrypt the file.
 
 ---
 
@@ -136,18 +149,18 @@ Budi's device gets the vault key sealed to it during `grant`. He can now decrypt
 | | `bootstrap-admin` | Promote yourself to admin (first user) |
 | | `config set` / `get` | View or change client config |
 | Teams | `create-team` | Create a team (admin) |
-| | `join` | Request to join a team |
-| | `teams` | List your teams |
+| | `join` | Request to join a team (pending until approved) |
+| | `teams` | List teams: joined / pending / not-joined |
 | | `members` | List team members |
 | Vaults | `create-vault` | Create a vault (admin) |
 | | `grant` | Give vault access to someone (admin) |
 | | `revoke` | Remove vault access + rotate key (admin) |
-| | `approve` | Activate a pending user (admin) |
-| Files | `push` | Encrypt + upload a file |
-| | `pull` | Download + decrypt a file |
-| | `history` | Show file version history |
-| | `checkout` | Restore a specific version |
-| | `rm` | Soft-delete a file |
+| | `approve` | Activate a pending user + re-share vault keys to their device (admin) |
+| Files | `push` | Encrypt + upload a file (`--vault` optional, auto-detected) |
+| | `pull` | Download + decrypt a file (`--vault` optional) |
+| | `history` | Show file version history (`--vault` optional) |
+| | `checkout` | Restore a specific version (`--vault` optional) |
+| | `rm` | Soft-delete a file (`--vault` optional) |
 | | `audit` | Show vault audit log |
 | Devices | `device list` | List your devices |
 | | `device add` | Authorize a new device |
@@ -198,7 +211,7 @@ internal/
   client/
     commands/            Cobra CLI commands (thin wrappers calling actions)
     actions/             Business logic shared between CLI and TUI
-    tui/                 Bubble Tea TUI (app.go, menu, vaults, teams, devices, audit, files, filepicker, confirm, unlock, theme)
+    tui/                 Bubble Tea TUI (app.go, wizard, menu, header, vaults, teams, devices, audit, files, filepicker, confirm, unlock, theme)
     ...                  Config, keystore, agent, signed API client
   server/                HTTP handlers, auth middleware, Postgres store
   crypto/                E2E primitives (Ed25519, X25519, secretbox, Argon2id)

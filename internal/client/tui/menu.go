@@ -28,7 +28,6 @@ func newTopMenu(width, height int) list.Model {
 		menuItem{title: "Audit", desc: "vault audit log", open: func() tea.Model { return newAuditPickerView(width, height) }},
 	}
 	l := list.New(items, list.NewDefaultDelegate(), width, height)
-	l.Title = "devsync"
 	l.SetShowHelp(true)
 	// rootModel owns quit (ctrl+c) and back (esc) globally.
 	l.DisableQuitKeybindings()
