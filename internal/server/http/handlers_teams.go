@@ -32,10 +32,13 @@ func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleTeams(w http.ResponseWriter, r *http.Request) {
 	var teams []store.Team
 	var err error
-	if r.URL.Query().Get("all") == "true" {
+	switch {
+	case r.URL.Query().Get("all") == "true":
 		teams, err = s.store.ListAllTeams(r.Context())
-	} else {
-		teams, err = s.store.ListTeamsForUser(r.Context(), userOf(r).ID)
+	case r.URL.Query().Get("pending") == "true":
+		teams, err = s.store.ListTeamsForUser(r.Context(), userOf(r).ID, "pending")
+	default:
+		teams, err = s.store.ListTeamsForUser(r.Context(), userOf(r).ID, "active")
 	}
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "list teams")

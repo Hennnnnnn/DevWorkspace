@@ -46,6 +46,12 @@ func (s *Store) AddTeamMember(ctx context.Context, teamID, userID, status string
 
 // ActivatePendingMemberships flips a user's pending team memberships to active
 // (on device/user approval).
+func (s *Store) ActivatePendingMemberships(ctx context.Context, userID string) error {
+	_, err := s.db.ExecContext(ctx, s.rebind(
+		`UPDATE team_members SET status='active' WHERE user_id=? AND status='pending'`), userID)
+	return err
+}
+
 func (s *Store) ListAllTeams(ctx context.Context) ([]Team, error) {
 	rows, err := s.db.QueryContext(ctx, s.rebind(
 		`SELECT id, name FROM teams ORDER BY name`))
@@ -64,18 +70,21 @@ func (s *Store) ListAllTeams(ctx context.Context) ([]Team, error) {
 	return out, rows.Err()
 }
 
-func (s *Store) ActivatePendingMemberships(ctx context.Context, userID string) error {
-	_, err := s.db.ExecContext(ctx, s.rebind(
-		`UPDATE team_members SET status='active' WHERE user_id=? AND status='pending'`), userID)
-	return err
-}
-
-// ListTeamsForUser returns teams the user is an active member of.
-func (s *Store) ListTeamsForUser(ctx context.Context, userID string) ([]Team, error) {
-	rows, err := s.db.QueryContext(ctx, s.rebind(
-		`SELECT t.id, t.name FROM teams t
+// ListTeamsForUser returns teams the user is a member of, filtered by status
+// (empty=all, "active", "pending").
+func (s *Store) ListTeamsForUser(ctx context.Context, userID, status string) ([]Team, error) {
+	q := `SELECT t.id, t.name FROM teams t
 		 JOIN team_members m ON m.team_id = t.id
-		 WHERE m.user_id=? AND m.status='active' ORDER BY t.name`), userID)
+		 WHERE m.user_id=?`
+	if status != "" {
+		q += ` AND m.status=?`
+	}
+	q += ` ORDER BY t.name`
+	args := []interface{}{userID}
+	if status != "" {
+		args = append(args, status)
+	}
+	rows, err := s.db.QueryContext(ctx, s.rebind(q), args...)
 	if err != nil {
 		return nil, err
 	}

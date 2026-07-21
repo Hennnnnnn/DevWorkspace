@@ -85,6 +85,21 @@ func ListAllTeams() ([]protocol.Team, error) {
 	return out.Teams, nil
 }
 
+// ListPendingTeams returns teams the caller has a pending join request for.
+func ListPendingTeams() ([]protocol.Team, error) {
+	cl, _, err := AuthedClient()
+	if err != nil {
+		return nil, err
+	}
+	q := urlValues()
+	q.Set("pending", "true")
+	var out protocol.TeamList
+	if err := cl.Get("/teams", q, &out); err != nil {
+		return nil, err
+	}
+	return out.Teams, nil
+}
+
 // ListMembers returns a team's members (optionally only pending ones).
 func ListMembers(team string, pending bool) ([]protocol.Member, error) {
 	cl, _, err := AuthedClient()

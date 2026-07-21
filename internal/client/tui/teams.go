@@ -17,14 +17,18 @@ import (
 // --- list items ---
 
 type teamItem struct {
-	t      protocol.Team
-	joined bool
+	t       protocol.Team
+	joined  bool
+	pending bool
 }
 
 func (i teamItem) Title() string { return i.t.Name }
 func (i teamItem) Description() string {
 	if i.joined {
 		return i.t.ID
+	}
+	if i.pending {
+		return "[pending approval]"
 	}
 	return "[not joined]"
 }
@@ -39,42 +43,56 @@ func (i teamSectionItem) FilterValue() string { return "" }
 // --- load ---
 
 type teamsLoadedMsg struct {
-	joined []protocol.Team
-	all    []protocol.Team
-	err    error
+	joined  []protocol.Team
+	pending []protocol.Team
+	all     []protocol.Team
+	err     error
 }
 
 func loadTeams() tea.Msg {
 	joined, err1 := actions.ListTeams()
-	all, err2 := actions.ListAllTeams()
+	pending, err2 := actions.ListPendingTeams()
+	all, err3 := actions.ListAllTeams()
 	if err1 != nil {
 		return teamsLoadedMsg{err: err1}
 	}
 	if err2 != nil {
 		return teamsLoadedMsg{err: err2}
 	}
-	return teamsLoadedMsg{joined: joined, all: all}
+	if err3 != nil {
+		return teamsLoadedMsg{err: err3}
+	}
+	return teamsLoadedMsg{joined: joined, pending: pending, all: all}
 }
 
-func buildTeamItems(joined, all []protocol.Team) []list.Item {
+func buildTeamItems(joined, pending, all []protocol.Team) []list.Item {
 	joinedSet := make(map[string]bool, len(joined))
 	for _, t := range joined {
 		joinedSet[t.ID] = true
 	}
-	items := make([]list.Item, 0, len(joined)+len(all)+2)
+	pendingSet := make(map[string]bool, len(pending))
+	for _, t := range pending {
+		pendingSet[t.ID] = true
+	}
+	items := make([]list.Item, 0, len(joined)+len(pending)+len(all)+3)
 	items = append(items, teamSectionItem{title: fmt.Sprintf("── Joined (%d) ──", len(joined))})
 	for _, t := range joined {
-		items = append(items, teamItem{t: t, joined: true})
+		items = append(items, teamItem{t: t, joined: true, pending: false})
+	}
+	items = append(items, teamSectionItem{title: fmt.Sprintf("── Pending (%d) ──", len(pending))})
+	for _, t := range pending {
+		items = append(items, teamItem{t: t, joined: false, pending: true})
 	}
 	notJoined := 0
+	start := len(items)
 	items = append(items, teamSectionItem{title: "── Not Joined ──"})
 	for _, t := range all {
-		if !joinedSet[t.ID] {
-			items = append(items, teamItem{t: t, joined: false})
+		if !joinedSet[t.ID] && !pendingSet[t.ID] {
+			items = append(items, teamItem{t: t, joined: false, pending: false})
 			notJoined++
 		}
 	}
-	items[len(joined)+1] = teamSectionItem{title: fmt.Sprintf("── Not Joined (%d) ──", notJoined)}
+	items[start] = teamSectionItem{title: fmt.Sprintf("── Not Joined (%d) ──", notJoined)}
 	return items
 }
 
@@ -89,6 +107,7 @@ type teamsModel struct {
 	statusGen     int
 	spinner       spinner.Model
 	joinedTeams   []protocol.Team
+	pendingTeams  []protocol.Team
 	allTeams      []protocol.Team
 }
 
@@ -135,8 +154,9 @@ func (m teamsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		m.err = msg.err
 		m.joinedTeams = msg.joined
+		m.pendingTeams = msg.pending
 		m.allTeams = msg.all
-		m.list.SetItems(buildTeamItems(msg.joined, msg.all))
+		m.list.SetItems(buildTeamItems(msg.joined, msg.pending, msg.all))
 		return m, nil
 
 	case actionDoneMsg:
@@ -211,7 +231,7 @@ func (m teamsModel) View() string {
 		return "\n" + dangerStyle.Render("  error: "+m.err.Error()) + "\n\n  esc: back\n"
 	}
 	body := m.list.View()
-	if len(m.joinedTeams) == 0 && len(m.allTeams) == 0 {
+	if len(m.joinedTeams) == 0 && len(m.pendingTeams) == 0 && len(m.allTeams) == 0 {
 		body = "\n  " + warningStyle.Render("no teams") + " — press c to create\n\n  esc: back\n"
 	}
 	if !actions.IsUnlocked() {
