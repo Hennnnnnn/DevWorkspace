@@ -3,6 +3,7 @@ package tui
 import (
 	"time"
 
+	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/Hennnnnnn/DevWorkspace/internal/client/actions"
@@ -15,6 +16,12 @@ import (
 const pollInterval = 5 * time.Second
 
 type pollTickMsg struct{}
+
+type copyResetMsg struct{}
+
+func clearCopiedAfter(d time.Duration) tea.Cmd {
+	return tea.Tick(d, func(time.Time) tea.Msg { return copyResetMsg{} })
+}
 
 type pollResultMsg struct {
 	status string
@@ -39,6 +46,7 @@ type waitingModel struct {
 	username    string
 	fingerprint string
 	lastErr     error
+	copied      bool
 }
 
 func newWaitingView(username, fingerprint string) tea.Model {
@@ -49,6 +57,17 @@ func (m waitingModel) Init() tea.Cmd { return doPoll() }
 
 func (m waitingModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.String() == "c" {
+			if err := clipboard.WriteAll(m.fingerprint); err == nil {
+				m.copied = true
+				return m, clearCopiedAfter(2 * time.Second)
+			}
+		}
+		return m, nil
+	case copyResetMsg:
+		m.copied = false
+		return m, nil
 	case pollTickMsg:
 		return m, doPoll()
 	case pollResultMsg:
@@ -68,8 +87,12 @@ func (m waitingModel) View() string {
 	s += "  Your account is registered but needs approval from your team admin.\n\n"
 	s += "  Send these to your admin:\n"
 	s += "    username:    " + selectionStyle.Render(m.username) + "\n"
-	s += "    fingerprint: " + selectionStyle.Render(m.fingerprint) + "\n\n"
+	s += "    fingerprint: " + selectionStyle.Render(m.fingerprint)
+	if m.copied {
+		s += "  " + selectionStyle.Render("copied!")
+	}
+	s += "\n\n"
 	s += "  checking every 5 seconds…  (this screen advances automatically)\n"
-	s += "\n  ctrl+c: quit\n"
+	s += "\n  c: copy fingerprint   ctrl+c: quit\n"
 	return s
 }
