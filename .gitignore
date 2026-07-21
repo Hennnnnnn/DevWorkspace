@@ -13,3 +13,8 @@
 # OS
 .DS_Store
 Thumbs.db
+
+# Go coverage
+*.out
+coverage
+*_coverage
