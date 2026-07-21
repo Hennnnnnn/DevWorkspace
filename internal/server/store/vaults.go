@@ -145,7 +145,9 @@ func (s *Store) ListVaultsForUser(ctx context.Context, userID string) ([]Vault, 
 		`SELECT v.id, v.team_id, v.name, t.name FROM vaults v
 		 JOIN vault_grants g ON g.vault_id = v.id
 		 JOIN teams t ON t.id = v.team_id
-		 WHERE g.user_id=? ORDER BY t.name, v.name`), userID)
+		 JOIN team_members m ON m.team_id = v.team_id
+		 WHERE g.user_id=? AND m.user_id=? AND m.status='active'
+		 ORDER BY t.name, v.name`), userID, userID)
 	if err != nil {
 		return nil, nil, err
 	}
