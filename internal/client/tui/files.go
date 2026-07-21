@@ -2,9 +2,11 @@ package tui
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/Hennnnnnn/DevWorkspace/internal/client/actions"
@@ -73,6 +75,8 @@ type filesModel struct {
 	loading       bool
 	err           error
 	status        string
+	statusGen     int
+	spinner       spinner.Model
 }
 
 func newFilesView(vault string, width, height int) tea.Model {
@@ -81,14 +85,34 @@ func newFilesView(vault string, width, height int) tea.Model {
 	l.SetShowHelp(true)
 	l.DisableQuitKeybindings()
 	l.AdditionalShortHelpKeys = func() []key.Binding {
-		return []key.Binding{helpKey("enter", "history"), helpKey("p", "pull"), helpKey("u", "push"), helpKey("d", "delete"), helpKey("U", "unlock")}
+		return []key.Binding{
+			helpKey("enter", "history"),
+			helpKey("p", "pull"),
+			helpKey("u", "push"),
+			helpKey("d", "delete"),
+			helpKey("U", "unlock"),
+			helpKey("r", "refresh"),
+		}
 	}
-	return filesModel{vault: vault, list: l, width: width, height: height, loading: true}
+	return filesModel{vault: vault, list: l, width: width, height: height, loading: true, spinner: newSpinner()}
 }
 
-func (m filesModel) Init() tea.Cmd { return loadFiles(m.vault) }
+func (m filesModel) Init() tea.Cmd {
+	return tea.Batch(loadFiles(m.vault), m.spinner.Tick)
+}
+
+func (m filesModel) isFiltering() bool {
+	return m.list.FilterState() != list.Unfiltered
+}
 
 func (m filesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+	var cmd tea.Cmd
+	if m.loading {
+		m.spinner, cmd = m.spinner.Update(msg)
+		cmds = append(cmds, cmd)
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -106,17 +130,25 @@ func (m filesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case actionDoneMsg:
+		m.statusGen++
 		if msg.err != nil {
 			m.status = dangerStyle.Render("error: " + msg.err.Error())
 		} else {
 			m.status = successStyle.Render(msg.ok)
-			return m, loadFiles(m.vault)
+			cmds = append(cmds, loadFiles(m.vault))
+		}
+		cmds = append(cmds, clearStatusCmd(4*time.Second, m.statusGen))
+		return m, tea.Batch(cmds...)
+
+	case statusMsg:
+		if msg.gen == m.statusGen {
+			m.status = ""
 		}
 		return m, nil
 
 	case tea.KeyMsg:
 		if m.loading {
-			return m, nil
+			break
 		}
 		switch msg.String() {
 		case "U":
@@ -130,8 +162,9 @@ func (m filesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if !actions.IsUnlocked() {
 					return m, pushView(newUnlockView())
 				}
+				m.statusGen++
 				m.status = "pulling " + it.f.Path + "…"
-				return m, pullFile(m.vault, it.f.Path)
+				return m, tea.Batch(pullFile(m.vault, it.f.Path), clearStatusCmd(4*time.Second, m.statusGen))
 			}
 		case "u":
 			if !actions.IsUnlocked() {
@@ -145,16 +178,23 @@ func (m filesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, pushView(newConfirmView("Delete "+it.f.Path+"?", doRmFile(m.vault, it.f.Path)))
 			}
+		case "r":
+			if m.list.FilterState() == list.Unfiltered {
+				m.loading = true
+				return m, tea.Batch(loadFiles(m.vault), m.spinner.Tick)
+			}
+			break
 		}
 	}
-	var cmd tea.Cmd
+
 	m.list, cmd = m.list.Update(msg)
-	return m, cmd
+	cmds = append(cmds, cmd)
+	return m, tea.Batch(cmds...)
 }
 
 func (m filesModel) View() string {
 	if m.loading {
-		return "\n  loading files…\n"
+		return fmt.Sprintf("\n  %s loading files…\n", m.spinner.View())
 	}
 	if m.err != nil {
 		return "\n" + dangerStyle.Render("  error: "+m.err.Error()) + "\n\n  esc: back\n"
@@ -217,6 +257,8 @@ type historyModel struct {
 	loading       bool
 	err           error
 	status        string
+	statusGen     int
+	spinner       spinner.Model
 }
 
 func newHistoryView(vault, path string, width, height int) tea.Model {
@@ -227,12 +269,25 @@ func newHistoryView(vault, path string, width, height int) tea.Model {
 	l.AdditionalShortHelpKeys = func() []key.Binding {
 		return []key.Binding{helpKey("c", "checkout version"), helpKey("U", "unlock")}
 	}
-	return historyModel{vault: vault, path: path, list: l, width: width, height: height, loading: true}
+	return historyModel{vault: vault, path: path, list: l, width: width, height: height, loading: true, spinner: newSpinner()}
 }
 
-func (m historyModel) Init() tea.Cmd { return loadHistory(m.vault, m.path) }
+func (m historyModel) Init() tea.Cmd {
+	return tea.Batch(loadHistory(m.vault, m.path), m.spinner.Tick)
+}
+
+func (m historyModel) isFiltering() bool {
+	return m.list.FilterState() != list.Unfiltered
+}
 
 func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+	var cmd tea.Cmd
+	if m.loading {
+		m.spinner, cmd = m.spinner.Update(msg)
+		cmds = append(cmds, cmd)
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -250,16 +305,24 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case actionDoneMsg:
+		m.statusGen++
 		if msg.err != nil {
 			m.status = dangerStyle.Render("error: " + msg.err.Error())
 		} else {
 			m.status = successStyle.Render(msg.ok)
 		}
+		cmds = append(cmds, clearStatusCmd(4*time.Second, m.statusGen))
+		return m, tea.Batch(cmds...)
+
+	case statusMsg:
+		if msg.gen == m.statusGen {
+			m.status = ""
+		}
 		return m, nil
 
 	case tea.KeyMsg:
 		if m.loading {
-			return m, nil
+			break
 		}
 		switch msg.String() {
 		case "U":
@@ -269,19 +332,21 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if !actions.IsUnlocked() {
 					return m, pushView(newUnlockView())
 				}
+				m.statusGen++
 				m.status = fmt.Sprintf("checking out v%d…", it.e.Version)
-				return m, checkoutFile(m.vault, m.path, it.e.Version)
+				return m, tea.Batch(checkoutFile(m.vault, m.path, it.e.Version), clearStatusCmd(4*time.Second, m.statusGen))
 			}
 		}
 	}
-	var cmd tea.Cmd
+
 	m.list, cmd = m.list.Update(msg)
-	return m, cmd
+	cmds = append(cmds, cmd)
+	return m, tea.Batch(cmds...)
 }
 
 func (m historyModel) View() string {
 	if m.loading {
-		return "\n  loading history…\n"
+		return fmt.Sprintf("\n  %s loading history…\n", m.spinner.View())
 	}
 	if m.err != nil {
 		return "\n" + dangerStyle.Render("  error: "+m.err.Error()) + "\n\n  esc: back\n"

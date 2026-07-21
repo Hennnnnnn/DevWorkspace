@@ -5,6 +5,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/Hennnnnnn/DevWorkspace/internal/client/actions"
@@ -34,6 +35,7 @@ type auditVaultPickerModel struct {
 	width, height int
 	loading       bool
 	err           error
+	spinner       spinner.Model
 }
 
 func newAuditPickerView(width, height int) tea.Model {
@@ -42,14 +44,30 @@ func newAuditPickerView(width, height int) tea.Model {
 	l.SetShowHelp(true)
 	l.DisableQuitKeybindings()
 	l.AdditionalShortHelpKeys = func() []key.Binding {
-		return []key.Binding{helpKey("enter", "view audit log")}
+		return []key.Binding{
+			helpKey("enter", "view audit log"),
+			helpKey("r", "refresh"),
+		}
 	}
-	return auditVaultPickerModel{list: l, width: width, height: height, loading: true}
+	return auditVaultPickerModel{list: l, width: width, height: height, loading: true, spinner: newSpinner()}
 }
 
-func (m auditVaultPickerModel) Init() tea.Cmd { return loadAuditVaults }
+func (m auditVaultPickerModel) Init() tea.Cmd {
+	return tea.Batch(loadAuditVaults, m.spinner.Tick)
+}
+
+func (m auditVaultPickerModel) isFiltering() bool {
+	return m.list.FilterState() != list.Unfiltered
+}
 
 func (m auditVaultPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+	var cmd tea.Cmd
+	if m.loading {
+		m.spinner, cmd = m.spinner.Update(msg)
+		cmds = append(cmds, cmd)
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -68,22 +86,30 @@ func (m auditVaultPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		if m.loading {
-			return m, nil
+			break
 		}
-		if msg.String() == "enter" {
+		switch msg.String() {
+		case "enter":
 			if it, ok := m.list.SelectedItem().(auditVaultItem); ok {
 				return m, pushView(newAuditLogView(it.v.Name, m.width, m.height))
 			}
+		case "r":
+			if m.list.FilterState() == list.Unfiltered {
+				m.loading = true
+				return m, tea.Batch(loadAuditVaults, m.spinner.Tick)
+			}
+			break
 		}
 	}
-	var cmd tea.Cmd
+
 	m.list, cmd = m.list.Update(msg)
-	return m, cmd
+	cmds = append(cmds, cmd)
+	return m, tea.Batch(cmds...)
 }
 
 func (m auditVaultPickerModel) View() string {
 	if m.loading {
-		return "\n  loading vaults…\n"
+		return fmt.Sprintf("\n  %s loading vaults…\n", m.spinner.View())
 	}
 	if m.err != nil {
 		return "\n" + dangerStyle.Render("  error: "+m.err.Error()) + "\n\n  esc: back\n"
@@ -121,6 +147,7 @@ type auditLogModel struct {
 	width, height int
 	loading       bool
 	err           error
+	spinner       spinner.Model
 }
 
 func newAuditLogView(vault string, width, height int) tea.Model {
@@ -128,12 +155,28 @@ func newAuditLogView(vault string, width, height int) tea.Model {
 	l.Title = "Audit — " + vault
 	l.SetShowHelp(true)
 	l.DisableQuitKeybindings()
-	return auditLogModel{vault: vault, list: l, width: width, height: height, loading: true}
+	l.AdditionalShortHelpKeys = func() []key.Binding {
+		return []key.Binding{helpKey("r", "refresh")}
+	}
+	return auditLogModel{vault: vault, list: l, width: width, height: height, loading: true, spinner: newSpinner()}
 }
 
-func (m auditLogModel) Init() tea.Cmd { return loadAuditLog(m.vault) }
+func (m auditLogModel) Init() tea.Cmd {
+	return tea.Batch(loadAuditLog(m.vault), m.spinner.Tick)
+}
+
+func (m auditLogModel) isFiltering() bool {
+	return m.list.FilterState() != list.Unfiltered
+}
 
 func (m auditLogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+	var cmd tea.Cmd
+	if m.loading {
+		m.spinner, cmd = m.spinner.Update(msg)
+		cmds = append(cmds, cmd)
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -152,17 +195,26 @@ func (m auditLogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		if m.loading {
-			return m, nil
+			break
+		}
+		switch msg.String() {
+		case "r":
+			if m.list.FilterState() == list.Unfiltered {
+				m.loading = true
+				return m, tea.Batch(loadAuditLog(m.vault), m.spinner.Tick)
+			}
+			break
 		}
 	}
-	var cmd tea.Cmd
+
 	m.list, cmd = m.list.Update(msg)
-	return m, cmd
+	cmds = append(cmds, cmd)
+	return m, tea.Batch(cmds...)
 }
 
 func (m auditLogModel) View() string {
 	if m.loading {
-		return "\n  loading audit log…\n"
+		return fmt.Sprintf("\n  %s loading audit log…\n", m.spinner.View())
 	}
 	if m.err != nil {
 		return "\n" + dangerStyle.Render("  error: "+m.err.Error()) + "\n\n  esc: back\n"

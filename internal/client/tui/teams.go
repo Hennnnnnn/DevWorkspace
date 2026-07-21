@@ -2,9 +2,11 @@ package tui
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -36,6 +38,8 @@ type teamsModel struct {
 	loading       bool
 	err           error
 	status        string
+	statusGen     int
+	spinner       spinner.Model
 }
 
 func newTeamsView(width, height int) tea.Model {
@@ -49,14 +53,28 @@ func newTeamsView(width, height int) tea.Model {
 			helpKey("c", "create"),
 			helpKey("j", "join"),
 			helpKey("d", "delete"),
+			helpKey("r", "refresh"),
 		}
 	}
-	return teamsModel{list: l, width: width, height: height, loading: true}
+	return teamsModel{list: l, width: width, height: height, loading: true, spinner: newSpinner()}
 }
 
-func (m teamsModel) Init() tea.Cmd { return loadTeams }
+func (m teamsModel) Init() tea.Cmd {
+	return tea.Batch(loadTeams, m.spinner.Tick)
+}
+
+func (m teamsModel) isFiltering() bool {
+	return m.list.FilterState() != list.Unfiltered
+}
 
 func (m teamsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+	var cmd tea.Cmd
+	if m.loading {
+		m.spinner, cmd = m.spinner.Update(msg)
+		cmds = append(cmds, cmd)
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -74,17 +92,25 @@ func (m teamsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case actionDoneMsg:
+		m.statusGen++
 		if msg.err != nil {
 			m.status = dangerStyle.Render("error: " + msg.err.Error())
 		} else {
 			m.status = successStyle.Render(msg.ok)
-			return m, loadTeams
+			cmds = append(cmds, loadTeams)
+		}
+		cmds = append(cmds, clearStatusCmd(4*time.Second, m.statusGen))
+		return m, tea.Batch(cmds...)
+
+	case statusMsg:
+		if msg.gen == m.statusGen {
+			m.status = ""
 		}
 		return m, nil
 
 	case tea.KeyMsg:
 		if m.loading {
-			return m, nil
+			break
 		}
 		switch msg.String() {
 		case "enter":
@@ -101,16 +127,23 @@ func (m teamsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "U":
 			return m, pushView(newUnlockView())
+		case "r":
+			if m.list.FilterState() == list.Unfiltered {
+				m.loading = true
+				return m, tea.Batch(loadTeams, m.spinner.Tick)
+			}
+			break
 		}
 	}
-	var cmd tea.Cmd
+
 	m.list, cmd = m.list.Update(msg)
-	return m, cmd
+	cmds = append(cmds, cmd)
+	return m, tea.Batch(cmds...)
 }
 
 func (m teamsModel) View() string {
 	if m.loading {
-		return "\n  loading teams…\n"
+		return fmt.Sprintf("\n  %s loading teams…\n", m.spinner.View())
 	}
 	if m.err != nil {
 		return "\n" + dangerStyle.Render("  error: "+m.err.Error()) + "\n\n  esc: back\n"
@@ -274,6 +307,8 @@ type membersModel struct {
 	loading       bool
 	err           error
 	status        string
+	statusGen     int
+	spinner       spinner.Model
 	pendingOnly   bool
 	allMembers    []protocol.Member
 }
@@ -288,9 +323,10 @@ func newMembersView(team string, width, height int) tea.Model {
 			helpKey("a", "approve selected"),
 			helpKey("p", "toggle pending"),
 			helpKey("U", "unlock"),
+			helpKey("r", "refresh"),
 		}
 	}
-	return membersModel{team: team, list: l, width: width, height: height, loading: true}
+	return membersModel{team: team, list: l, width: width, height: height, loading: true, spinner: newSpinner()}
 }
 
 func (m membersModel) filterAndSetItems() {
@@ -305,9 +341,22 @@ func (m membersModel) filterAndSetItems() {
 	m.list.SetItems(items)
 }
 
-func (m membersModel) Init() tea.Cmd { return loadMembers(m.team) }
+func (m membersModel) Init() tea.Cmd {
+	return tea.Batch(loadMembers(m.team), m.spinner.Tick)
+}
+
+func (m membersModel) isFiltering() bool {
+	return m.list.FilterState() != list.Unfiltered
+}
 
 func (m membersModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+	var cmd tea.Cmd
+	if m.loading {
+		m.spinner, cmd = m.spinner.Update(msg)
+		cmds = append(cmds, cmd)
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -322,17 +371,25 @@ func (m membersModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case actionDoneMsg:
+		m.statusGen++
 		if msg.err != nil {
 			m.status = dangerStyle.Render("error: " + msg.err.Error())
 		} else {
 			m.status = successStyle.Render(msg.ok)
-			return m, loadMembers(m.team)
+			cmds = append(cmds, loadMembers(m.team))
+		}
+		cmds = append(cmds, clearStatusCmd(4*time.Second, m.statusGen))
+		return m, tea.Batch(cmds...)
+
+	case statusMsg:
+		if msg.gen == m.statusGen {
+			m.status = ""
 		}
 		return m, nil
 
 	case tea.KeyMsg:
 		if m.loading {
-			return m, nil
+			break
 		}
 		switch msg.String() {
 		case "a":
@@ -347,16 +404,23 @@ func (m membersModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "U":
 			return m, pushView(newUnlockView())
+		case "r":
+			if m.list.FilterState() == list.Unfiltered {
+				m.loading = true
+				return m, tea.Batch(loadMembers(m.team), m.spinner.Tick)
+			}
+			break
 		}
 	}
-	var cmd tea.Cmd
+
 	m.list, cmd = m.list.Update(msg)
-	return m, cmd
+	cmds = append(cmds, cmd)
+	return m, tea.Batch(cmds...)
 }
 
 func (m membersModel) View() string {
 	if m.loading {
-		return "\n  loading members…\n"
+		return fmt.Sprintf("\n  %s loading members…\n", m.spinner.View())
 	}
 	if m.err != nil {
 		return "\n" + dangerStyle.Render("  error: "+m.err.Error()) + "\n\n  esc: back\n"
@@ -400,11 +464,11 @@ func doApprove(user, fingerprint string) tea.Cmd {
 }
 
 type approveInputModel struct {
-	user        string
-	team        string
-	input       textinput.Model
-	err         error
-	working     bool
+	user    string
+	team    string
+	input   textinput.Model
+	err     error
+	working bool
 }
 
 func newApproveInputView(user, team string) tea.Model {

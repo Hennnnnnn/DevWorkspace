@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/charmbracelet/bubbles/filepicker"
@@ -58,8 +59,15 @@ func (m filePickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		if msg.String() == "esc" {
+		switch msg.String() {
+		case "esc":
 			return m, func() tea.Msg { return popMsg{} }
+		case "~":
+			home, err := os.UserHomeDir()
+			if err == nil {
+				m.fp.CurrentDirectory = home
+			}
+			return m, nil
 		}
 	}
 
@@ -79,10 +87,12 @@ func (m filePickerModel) View() string {
 	if m.working {
 		return "\n  " + infoStyle.Render(m.status) + "\n"
 	}
-	s := "\n  " + infoStyle.Render("Select file to push to "+m.vault) + "\n\n" + m.fp.View()
+	s := "\n  " + infoStyle.Render("Select file to push to "+m.vault) + "\n"
+	s += "\n  " + selectionStyle.Render("path: "+m.fp.CurrentDirectory) + "\n\n"
+	s += m.fp.View()
 	if m.err != nil {
 		s += "\n  " + dangerStyle.Render("error: "+m.err.Error()) + "\n"
 	}
-	s += "\n  esc: cancel\n"
+	s += "\n  esc: cancel   ~: home\n"
 	return s
 }

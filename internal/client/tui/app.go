@@ -48,6 +48,9 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c":
 			return m, tea.Quit
 		case "esc":
+			if fv, ok := m.top().(filterableView); ok && fv.isFiltering() {
+				break // forward to child, list clears filter
+			}
 			if len(m.stack) > 1 {
 				m.stack = m.stack[:len(m.stack)-1]
 				return m, nil
