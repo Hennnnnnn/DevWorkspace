@@ -127,6 +127,8 @@ func NewRoot() *cobra.Command {
 		newAuditCmd(),
 		// device
 		newDeviceCmd(),
+		// recovery
+		newRecoverCmd(),
 	)
 	return root
 }

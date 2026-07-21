@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"encoding/base64"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -14,7 +13,7 @@ func newInitCmd() *cobra.Command {
 	var force bool
 	cmd := &cobra.Command{
 		Use:   "init",
-		Short: "Generate a device keypair and back up the private key",
+		Short: "Generate a device keypair and recovery phrase",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if keystore.Exists() && !force {
 				return fmt.Errorf("device key already exists; use --force to overwrite (DESTROYS old key)")
@@ -34,7 +33,11 @@ func newInitCmd() *cobra.Command {
 				return fmt.Errorf("passphrase must be at least 8 characters")
 			}
 
-			kp, err := crypto.GenerateKeyPair()
+			seed, err := crypto.GenerateRecoverySeed()
+			if err != nil {
+				return err
+			}
+			kp, err := crypto.DeriveKeyPairFromSeed(seed)
 			if err != nil {
 				return err
 			}
@@ -46,17 +49,21 @@ func newInitCmd() *cobra.Command {
 				return err
 			}
 
+			mnemonic, err := crypto.SeedToMnemonic(seed)
+			if err != nil {
+				return err
+			}
+
 			fp := crypto.Fingerprint(kp.SignPub)
-			// Forced backup: show the private-key material and instruct the user.
-			backup := base64.StdEncoding.EncodeToString(kp.SignPriv)
 			fmt.Println("\n=== DEVICE KEY CREATED ===")
 			fmt.Printf("Fingerprint: %s\n", fp)
-			fmt.Println("\n!!! BACK UP THIS PRIVATE KEY NOW — there is NO recovery without it !!!")
-			fmt.Println("Store it in a password manager or offline. Anyone with it + your")
-			fmt.Println("passphrase can impersonate this device.")
+			fmt.Println("\n── RECOVERY PHRASE ──")
+			fmt.Println("Write down these 24 words. Store them offline.")
+			fmt.Println("Anyone with these words can recover this device's keys (without your passphrase).")
 			fmt.Println()
-			fmt.Printf("PRIVATE KEY (backup): %s\n", backup)
-			fmt.Println("\nNext: `devsync config set server_url <url>` then `devsync register`.")
+			fmt.Println(mnemonic)
+			fmt.Println()
+			fmt.Println("Next: `devsync config set server_url <url>` then `devsync register`.")
 			return nil
 		},
 	}

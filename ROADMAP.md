@@ -8,7 +8,7 @@
 
 > Note: `PLAN.md` covers the (completed) TUI build. This file is the next phase — the road to actual users.
 >
-> **Progress:** Items #1, #2, #3 shipped. Next: #4 (recovery code).
+> **Progress:** Items #1, #2, #3, #4 shipped. Next: #5 (trust signals).
 
 ---
 
@@ -57,14 +57,17 @@
 
 **Done when:** onboarding a teammate needs no manual fingerprint exchange.
 
-### 4. Recovery code (mnemonic key recovery)
+### 4. Recovery code (mnemonic key recovery) ✅ DONE
 
 **Why:** today there is **no recovery, no backup, no passphrase change**. The private key lives only on the device, encrypted by the passphrase. Lost passphrase / lost device / dead disk = **all secrets gone permanently** (unless a second device is still linked). For solo single-device users (the majority) the risk is 100%. This is a silent adoption killer and generates bad reviews from the first user who loses data.
 
-- On `init`, generate a recovery phrase (mnemonic / recovery-seed, hardware-wallet style).
-- User stores it offline.
-- New device can restore the private key from the recovery phrase without the old passphrase.
-- Heaviest item on the list: derive key material from the recovery seed and store an encrypted backup share.
+- ✅ On `init`, generate a 32-byte recovery seed → derive Ed25519 + X25519 keys via HKDF-SHA256.
+- ✅ Encode seed as 24-word BIP39 mnemonic with SHA256 checksum.
+- ✅ `devsync recover <mnemonic>` restores the same key pair deterministically, fingerprinted identically.
+- ✅ BIP39 wordlist embedded, no extra dependency.
+- ✅ Tests: mnemonic round-trip, checksum validation, deterministic derivation, full encrypt/decrypt flow.
+
+**Shipped in:** TODO-commit (2025-07-21).
 
 **Done when:** a user who lost their device/passphrase can recover access with only the recovery phrase.
 
@@ -93,9 +96,9 @@
 
 If momentum matters more than strict impact order:
 
-`2 ✅ → 1 ✅ → 3 → 5 → 4`
+`2 ✅ → 1 ✅ → 3 → 4 ✅ → 5`
 
-Items #1, #2, #3 shipped. Next: #4 (recovery code).
+Items #1, #2, #3, #4 shipped. Next: #5 (trust signals).
 
 *(Ordering decision still open — see bottom.)*
 
@@ -114,6 +117,7 @@ Recorded so they are not forgotten, deliberately deferred:
 - **Web UI / dashboard** — CLI + TUI only for now.
 - **Audit log export / SIEM integration** — audit is read-only in-app today; exporting is a later concern.
 - **Server observability** — metrics, structured logs, tracing for operators self-hosting at scale.
+- **Encrypted backup share (server-side recovery blob)** — skipped from #4. The 24-word BIP39 mnemonic alone is sufficient for recovery. An encrypted blob on the server would add passphrase-less cross-device restore, but adds complexity (key-splitting, server-side storage). Add when users demand passphrase-less recovery.
 
 ---
 

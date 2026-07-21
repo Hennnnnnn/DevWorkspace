@@ -105,6 +105,102 @@ func TestPrivateKeyRoundTrip(t *testing.T) {
 	}
 }
 
+func TestMnemonicRoundTrip(t *testing.T) {
+	seed, err := GenerateRecoverySeed()
+	if err != nil {
+		t.Fatal(err)
+	}
+	mnemonic, err := SeedToMnemonic(seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	words := strings.Fields(mnemonic)
+	if len(words) != 24 {
+		t.Fatalf("expected 24 words, got %d", len(words))
+	}
+	got, err := MnemonicToSeed(mnemonic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(seed, got) {
+		t.Fatal("seed mismatch after mnemonic round-trip")
+	}
+}
+
+func TestMnemonicInvalidWord(t *testing.T) {
+	mnemonic := strings.Repeat("abandon ", 23) + "notaword"
+	if _, err := MnemonicToSeed(mnemonic); err == nil {
+		t.Fatal("expected error for invalid word")
+	}
+}
+
+func TestMnemonicWrongChecksum(t *testing.T) {
+	seed, _ := GenerateRecoverySeed()
+	mnemonic, _ := SeedToMnemonic(seed)
+	words := strings.Fields(mnemonic)
+	words[23] = "zoo"
+	if _, err := MnemonicToSeed(strings.Join(words, " ")); err == nil {
+		t.Fatal("expected checksum error for tampered mnemonic")
+	}
+}
+
+func TestMnemonicWrongLength(t *testing.T) {
+	if _, err := MnemonicToSeed("abandon abandon abandon"); err == nil {
+		t.Fatal("expected error for wrong word count")
+	}
+}
+
+func TestDeriveKeyPairFromSeedDeterministic(t *testing.T) {
+	seed, _ := GenerateRecoverySeed()
+	kp1, err := DeriveKeyPairFromSeed(seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kp2, err := DeriveKeyPairFromSeed(seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !kp1.SignPriv.Equal(kp2.SignPriv) || kp1.BoxPriv != kp2.BoxPriv {
+		t.Fatal("same seed produced different keys")
+	}
+	if Fingerprint(kp1.SignPub) != Fingerprint(kp2.SignPub) {
+		t.Fatal("same seed produced different fingerprints")
+	}
+}
+
+func TestDeriveKeyPairFromSeedDistinct(t *testing.T) {
+	s1, _ := GenerateRecoverySeed()
+	s2, _ := GenerateRecoverySeed()
+	kp1, _ := DeriveKeyPairFromSeed(s1)
+	kp2, _ := DeriveKeyPairFromSeed(s2)
+	if Fingerprint(kp1.SignPub) == Fingerprint(kp2.SignPub) {
+		t.Fatal("different seeds produced same fingerprint")
+	}
+}
+
+func TestDeriveKeyPairFromSeedBadLength(t *testing.T) {
+	if _, err := DeriveKeyPairFromSeed([]byte("too short")); err == nil {
+		t.Fatal("expected error for short seed")
+	}
+}
+
+func TestFullRecoveryFlow(t *testing.T) {
+	seed, _ := GenerateRecoverySeed()
+	kp, _ := DeriveKeyPairFromSeed(seed)
+
+	ek, err := EncryptPrivateKey(kp, "recovery pass")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := DecryptPrivateKey(ek, "recovery pass")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.SignPriv.Equal(kp.SignPriv) || got.BoxPriv != kp.BoxPriv {
+		t.Fatal("recovery key pair did not survive encrypt/decrypt round-trip")
+	}
+}
+
 func TestFingerprintStableAndDistinct(t *testing.T) {
 	kp := mustKP(t)
 	fp := Fingerprint(kp.SignPub)
