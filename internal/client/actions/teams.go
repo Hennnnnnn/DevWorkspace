@@ -70,6 +70,21 @@ func ListTeams() ([]protocol.Team, error) {
 	return out.Teams, nil
 }
 
+// ListAllTeams returns every team in the system.
+func ListAllTeams() ([]protocol.Team, error) {
+	cl, _, err := AuthedClient()
+	if err != nil {
+		return nil, err
+	}
+	q := urlValues()
+	q.Set("all", "true")
+	var out protocol.TeamList
+	if err := cl.Get("/teams", q, &out); err != nil {
+		return nil, err
+	}
+	return out.Teams, nil
+}
+
 // ListMembers returns a team's members (optionally only pending ones).
 func ListMembers(team string, pending bool) ([]protocol.Member, error) {
 	cl, _, err := AuthedClient()

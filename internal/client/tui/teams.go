@@ -14,23 +14,71 @@ import (
 	"github.com/Hennnnnnn/DevWorkspace/internal/protocol"
 )
 
-// --- teams list ---
+// --- list items ---
 
-type teamItem struct{ t protocol.Team }
+type teamItem struct {
+	t      protocol.Team
+	joined bool
+}
 
-func (i teamItem) Title() string       { return i.t.Name }
-func (i teamItem) Description() string { return "id: " + i.t.ID }
+func (i teamItem) Title() string { return i.t.Name }
+func (i teamItem) Description() string {
+	if i.joined {
+		return i.t.ID
+	}
+	return "[not joined]"
+}
 func (i teamItem) FilterValue() string { return i.t.Name }
 
+type teamSectionItem struct{ title string }
+
+func (i teamSectionItem) Title() string       { return i.title }
+func (i teamSectionItem) Description() string { return "" }
+func (i teamSectionItem) FilterValue() string { return "" }
+
+// --- load ---
+
 type teamsLoadedMsg struct {
-	teams []protocol.Team
-	err   error
+	joined []protocol.Team
+	all    []protocol.Team
+	err    error
 }
 
 func loadTeams() tea.Msg {
-	ts, err := actions.ListTeams()
-	return teamsLoadedMsg{teams: ts, err: err}
+	joined, err1 := actions.ListTeams()
+	all, err2 := actions.ListAllTeams()
+	if err1 != nil {
+		return teamsLoadedMsg{err: err1}
+	}
+	if err2 != nil {
+		return teamsLoadedMsg{err: err2}
+	}
+	return teamsLoadedMsg{joined: joined, all: all}
 }
+
+func buildTeamItems(joined, all []protocol.Team) []list.Item {
+	joinedSet := make(map[string]bool, len(joined))
+	for _, t := range joined {
+		joinedSet[t.ID] = true
+	}
+	items := make([]list.Item, 0, len(joined)+len(all)+2)
+	items = append(items, teamSectionItem{title: fmt.Sprintf("── Joined (%d) ──", len(joined))})
+	for _, t := range joined {
+		items = append(items, teamItem{t: t, joined: true})
+	}
+	notJoined := 0
+	items = append(items, teamSectionItem{title: "── Not Joined ──"})
+	for _, t := range all {
+		if !joinedSet[t.ID] {
+			items = append(items, teamItem{t: t, joined: false})
+			notJoined++
+		}
+	}
+	items[len(joined)+1] = teamSectionItem{title: fmt.Sprintf("── Not Joined (%d) ──", notJoined)}
+	return items
+}
+
+// --- teams model ---
 
 type teamsModel struct {
 	list          list.Model
@@ -40,6 +88,8 @@ type teamsModel struct {
 	status        string
 	statusGen     int
 	spinner       spinner.Model
+	joinedTeams   []protocol.Team
+	allTeams      []protocol.Team
 }
 
 func newTeamsView(width, height int) tea.Model {
@@ -49,9 +99,9 @@ func newTeamsView(width, height int) tea.Model {
 	l.DisableQuitKeybindings()
 	l.AdditionalShortHelpKeys = func() []key.Binding {
 		return []key.Binding{
-			helpKey("enter", "members"),
+			helpKey("enter", "members / join"),
 			helpKey("c", "create"),
-			helpKey("j", "join"),
+			helpKey("j", "join selected"),
 			helpKey("d", "delete"),
 			helpKey("r", "refresh"),
 		}
@@ -84,11 +134,9 @@ func (m teamsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case teamsLoadedMsg:
 		m.loading = false
 		m.err = msg.err
-		items := make([]list.Item, len(msg.teams))
-		for i, t := range msg.teams {
-			items[i] = teamItem{t: t}
-		}
-		m.list.SetItems(items)
+		m.joinedTeams = msg.joined
+		m.allTeams = msg.all
+		m.list.SetItems(buildTeamItems(msg.joined, msg.all))
 		return m, nil
 
 	case actionDoneMsg:
@@ -114,17 +162,31 @@ func (m teamsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch msg.String() {
 		case "enter":
-			if it, ok := m.list.SelectedItem().(teamItem); ok {
+			it, ok := m.list.SelectedItem().(teamItem)
+			if !ok {
+				break
+			}
+			if it.joined {
 				return m, pushView(newMembersView(it.t.Name, m.width, m.height))
 			}
+			return m, doJoinTeam(it.t.Name)
 		case "c":
 			return m, pushView(newTeamInputView("create"))
 		case "j":
-			return m, pushView(newTeamInputView("join"))
-		case "d":
-			if it, ok := m.list.SelectedItem().(teamItem); ok {
-				return m, pushView(newConfirmView("Delete team "+it.t.Name+"?", doDeleteTeam(it.t.Name)))
+			it, ok := m.list.SelectedItem().(teamItem)
+			if !ok {
+				break
 			}
+			if it.joined {
+				break
+			}
+			return m, doJoinTeam(it.t.Name)
+		case "d":
+			it, ok := m.list.SelectedItem().(teamItem)
+			if !ok || !it.joined {
+				break
+			}
+			return m, pushView(newConfirmView("Delete team "+it.t.Name+"?", doDeleteTeam(it.t.Name)))
 		case "U":
 			return m, pushView(newUnlockView())
 		case "r":
@@ -149,8 +211,8 @@ func (m teamsModel) View() string {
 		return "\n" + dangerStyle.Render("  error: "+m.err.Error()) + "\n\n  esc: back\n"
 	}
 	body := m.list.View()
-	if len(m.list.Items()) == 0 {
-		body = "\n  " + warningStyle.Render("no teams") + " — press c to create or j to join\n\n  esc: back\n"
+	if len(m.joinedTeams) == 0 && len(m.allTeams) == 0 {
+		body = "\n  " + warningStyle.Render("no teams") + " — press c to create\n\n  esc: back\n"
 	}
 	if !actions.IsUnlocked() {
 		body += "\n  " + warningStyle.Render("locked") + " — press U to unlock (needed for create/join/delete)\n"
@@ -170,35 +232,33 @@ func doDeleteTeam(name string) tea.Cmd {
 	}
 }
 
-// --- team input (create / join) ---
-
-type teamInputResultMsg struct {
-	action string // "create" or "join"
-	name   string
-	err    error
+func doJoinTeam(name string) tea.Cmd {
+	return func() tea.Msg {
+		if err := actions.Join(name); err != nil {
+			return actionDoneMsg{err: err}
+		}
+		return actionDoneMsg{ok: fmt.Sprintf("joined team %q (pending approval)", name)}
+	}
 }
 
-func doTeamInput(action, name string) tea.Cmd {
+// --- team input (create) ---
+
+type teamInputResultMsg struct {
+	name string
+	err  error
+}
+
+func doTeamInput(name string) tea.Cmd {
 	return func() tea.Msg {
-		switch action {
-		case "create":
-			t, err := actions.CreateTeam(name)
-			if err != nil {
-				return teamInputResultMsg{action: action, err: err}
-			}
-			return teamInputResultMsg{action: action, name: t.Name}
-		case "join":
-			if err := actions.Join(name); err != nil {
-				return teamInputResultMsg{action: action, err: err}
-			}
-			return teamInputResultMsg{action: action, name: name}
+		_, err := actions.CreateTeam(name)
+		if err != nil {
+			return teamInputResultMsg{err: err}
 		}
-		return teamInputResultMsg{err: fmt.Errorf("unknown action: %s", action)}
+		return teamInputResultMsg{name: name}
 	}
 }
 
 type teamInputModel struct {
-	action  string // "create" or "join"
 	input   textinput.Model
 	err     error
 	working bool
@@ -206,14 +266,9 @@ type teamInputModel struct {
 
 func newTeamInputView(action string) tea.Model {
 	ti := textinput.New()
-	switch action {
-	case "create":
-		ti.Placeholder = "team name"
-	case "join":
-		ti.Placeholder = "team name to join"
-	}
+	ti.Placeholder = "team name"
 	ti.Focus()
-	return teamInputModel{action: action, input: ti}
+	return teamInputModel{input: ti}
 }
 
 func (m teamInputModel) Init() tea.Cmd { return textinput.Blink }
@@ -227,7 +282,7 @@ func (m teamInputModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.input.Reset()
 			return m, nil
 		}
-		status := fmt.Sprintf("team %q %sd", msg.name, m.action)
+		status := fmt.Sprintf("team %q created", msg.name)
 		return m, tea.Sequence(
 			func() tea.Msg { return popMsg{} },
 			func() tea.Msg { return actionDoneMsg{ok: status} },
@@ -241,7 +296,7 @@ func (m teamInputModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.working = true
 			m.err = nil
-			return m, doTeamInput(m.action, m.input.Value())
+			return m, doTeamInput(m.input.Value())
 		}
 	}
 	var cmd tea.Cmd
@@ -250,13 +305,7 @@ func (m teamInputModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m teamInputModel) View() string {
-	var s string
-	switch m.action {
-	case "create":
-		s = "\n  " + infoStyle.Render("Create team") + "\n\n  " + m.input.View() + "\n"
-	case "join":
-		s = "\n  " + infoStyle.Render("Join team") + "\n\n  " + m.input.View() + "\n"
-	}
+	s := "\n  " + infoStyle.Render("Create team") + "\n\n  " + m.input.View() + "\n"
 	if m.working {
 		s += "\n  working…\n"
 	}

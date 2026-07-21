@@ -46,6 +46,24 @@ func (s *Store) AddTeamMember(ctx context.Context, teamID, userID, status string
 
 // ActivatePendingMemberships flips a user's pending team memberships to active
 // (on device/user approval).
+func (s *Store) ListAllTeams(ctx context.Context) ([]Team, error) {
+	rows, err := s.db.QueryContext(ctx, s.rebind(
+		`SELECT id, name FROM teams ORDER BY name`))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Team
+	for rows.Next() {
+		var t Team
+		if err := rows.Scan(&t.ID, &t.Name); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) ActivatePendingMemberships(ctx context.Context, userID string) error {
 	_, err := s.db.ExecContext(ctx, s.rebind(
 		`UPDATE team_members SET status='active' WHERE user_id=? AND status='pending'`), userID)

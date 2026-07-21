@@ -30,7 +30,13 @@ func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleTeams(w http.ResponseWriter, r *http.Request) {
-	teams, err := s.store.ListTeamsForUser(r.Context(), userOf(r).ID)
+	var teams []store.Team
+	var err error
+	if r.URL.Query().Get("all") == "true" {
+		teams, err = s.store.ListAllTeams(r.Context())
+	} else {
+		teams, err = s.store.ListTeamsForUser(r.Context(), userOf(r).ID)
+	}
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "list teams")
 		return

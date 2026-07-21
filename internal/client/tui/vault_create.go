@@ -67,8 +67,8 @@ func (m vaultTeamPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case teamsLoadedMsg:
 		m.loading = false
 		m.err = msg.err
-		items := make([]list.Item, len(msg.teams))
-		for i, t := range msg.teams {
+		items := make([]list.Item, len(msg.joined))
+		for i, t := range msg.joined {
 			items[i] = vaultTeamItem{t: t}
 		}
 		m.list.SetItems(items)
