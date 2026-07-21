@@ -55,6 +55,16 @@ type KeyShare struct {
 	EncryptedKey []byte
 }
 
+type InviteToken struct {
+	Token     string
+	TeamID    string
+	Username  string
+	CreatedBy string
+	ExpiresAt time.Time
+	UsedBy    *string
+	UsedAt    *time.Time
+}
+
 type AuditRow struct {
 	Username  string
 	Device    string

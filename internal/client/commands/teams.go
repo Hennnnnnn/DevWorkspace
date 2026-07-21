@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -12,14 +13,16 @@ func newInviteCmd() *cobra.Command {
 	var team string
 	cmd := &cobra.Command{
 		Use:   "invite <user> --team <team>",
-		Short: "Invite a user to a team (admin)",
-		Long:  "Add a user to a team directly. They don't need to request join first.\n\nArguments:\n  <user>  Username to invite",
+		Short: "Generate an invite token for a user to join a team (admin)",
+		Long:  "Create a single-use invite token (24h expiry). Share the token with the user.\n\nArguments:\n  <user>  Username to invite",
 		Args:  expectArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			if err := actions.Invite(args[0], team); err != nil {
+			resp, err := actions.Invite(args[0], team)
+			if err != nil {
 				return err
 			}
-			fmt.Printf("invited %s to team %q\n", args[0], team)
+			fmt.Printf("Invite token for %s → team %q:\n\n  %s\n\nExpires: %s\n", args[0], team, resp.Token, resp.ExpiresAt)
+			fmt.Println("Share this token with the user. They run: devsync join <token>")
 			return nil
 		},
 	}
@@ -63,11 +66,17 @@ func newCreateTeamCmd() *cobra.Command {
 
 func newJoinCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "join <team>",
-		Short: "Request to join a team",
-		Long:  "Request to join an existing team (requires admin approval).\n\nArguments:\n  <team>  Team name to join",
+		Use:   "join <token-or-team>",
+		Short: "Claim an invite token or request to join a team",
+		Long:  "With a token: auto-approves and adds to team.\nWith a team name: requests join (requires admin approval).\n\nArguments:\n  <token-or-team>  Invite token or team name",
 		Args:  expectArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
+			if err := actions.ClaimInvite(args[0]); err == nil {
+				fmt.Println("invite claimed — you are now an active team member")
+				return nil
+			} else if !strings.Contains(err.Error(), "(404)") {
+				return err
+			}
 			if err := actions.Join(args[0]); err != nil {
 				return err
 			}

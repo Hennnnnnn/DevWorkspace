@@ -1,8 +1,12 @@
 package http
 
 import (
+	"crypto/rand"
+	"encoding/base32"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"time"
 
 	"github.com/Hennnnnnn/DevWorkspace/internal/protocol"
 	"github.com/Hennnnnnn/DevWorkspace/internal/server/store"
@@ -105,22 +109,51 @@ func (s *Server) handleInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	u, err := s.store.GetUserByUsername(ctx, req.Username)
-	if err != nil {
-		writeErr(w, http.StatusNotFound, "user not found")
-		return
-	}
 	t, err := s.store.GetTeamByName(ctx, req.TeamName)
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "team not found")
 		return
 	}
-	if err := s.store.AddTeamMember(ctx, t.ID, u.ID, "active"); err != nil {
-		writeErr(w, http.StatusInternalServerError, "failed to add team member")
+	token := generateToken()
+	expiresAt := time.Now().Add(24 * time.Hour)
+	if err := s.store.CreateInviteToken(ctx, token, t.ID, req.Username, userOf(r).ID, expiresAt); err != nil {
+		writeErr(w, http.StatusInternalServerError, "failed to create invite token")
 		return
 	}
 	_ = s.store.Log(ctx, userOf(r).ID, deviceOf(r).ID, "", "invite", req.Username+" to "+req.TeamName)
+	writeJSON(w, http.StatusOK, protocol.InviteTokenResponse{
+		Token:     token,
+		ExpiresAt: expiresAt.Format(time.RFC3339),
+	})
+}
+
+func (s *Server) handleClaimInvite(w http.ResponseWriter, r *http.Request) {
+	var req protocol.ClaimInviteRequest
+	if err := json.Unmarshal(bodyOf(r), &req); err != nil || req.Token == "" {
+		writeErr(w, http.StatusBadRequest, "token required")
+		return
+	}
+	ctx := r.Context()
+	u := userOf(r)
+	d := deviceOf(r)
+	if err := s.store.ClaimInviteToken(ctx, req.Token, u.Username, u.ID, d.ID); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeErr(w, http.StatusNotFound, "token not found")
+			return
+		}
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	_ = s.store.Log(ctx, u.ID, d.ID, "", "claim_invite", req.Token)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "active"})
+}
+
+func generateToken() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		panic("crypto/rand: " + err.Error())
+	}
+	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(b[:])
 }
 
 func (s *Server) handleSetAdmin(w http.ResponseWriter, r *http.Request) {

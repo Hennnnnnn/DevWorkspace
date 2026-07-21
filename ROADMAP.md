@@ -8,7 +8,7 @@
 
 > Note: `PLAN.md` covers the (completed) TUI build. This file is the next phase — the road to actual users.
 >
-> **Progress:** Items #1, #2 shipped. Next: #3 (invite tokens).
+> **Progress:** Items #1, #2, #3 shipped. Next: #4 (recovery code).
 
 ---
 
@@ -45,13 +45,15 @@
 
 **Pending UX polish:** `bootstrap-admin` and `unlock` (step 4) both prompt for passphrase separately — user types it twice. Refactor to share passphrase across steps if UX complaint arises.
 
-### 3. Invite token flow (replaces manual fingerprint exchange)
+### 3. Invite token flow (replaces manual fingerprint exchange) ✅ DONE
 
 **Why:** sharing a secret today requires the admin and teammate to exchange an SSH-style fingerprint over an external channel — the most error-prone and security-sensitive step. Server already has `handleInvite`; needs a token layer.
 
-- Admin: `devsync invite <user> --team <team>` → issues a short-lived invite code/token.
-- Teammate: `devsync join <code>` → registers + joins without manual fingerprint copy-paste.
-- Token must bind the expected identity so it can't be replayed by a third party.
+- ✅ Admin: `devsync invite <user> --team <team>` → issues a single-use invite token (24h expiry, base32 encoded).
+- ✅ Teammate: `devsync join <token>` → claims token, auto-activates user+device, adds to team as active member.
+- ✅ Token binds expected username so it can't be replayed by a third party.
+- ✅ `invite_tokens` table (SQLite + Postgres migrations), atomic claim in transaction.
+- ✅ Backward-compatible: `devsync join <team>` still works for name-based join requests.
 
 **Done when:** onboarding a teammate needs no manual fingerprint exchange.
 
@@ -93,7 +95,7 @@ If momentum matters more than strict impact order:
 
 `2 ✅ → 1 ✅ → 3 → 5 → 4`
 
-Items #1, #2 shipped. Next: #3 (invite tokens).
+Items #1, #2, #3 shipped. Next: #4 (recovery code).
 
 *(Ordering decision still open — see bottom.)*
 

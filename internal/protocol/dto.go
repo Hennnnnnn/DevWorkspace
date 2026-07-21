@@ -85,6 +85,15 @@ type InviteRequest struct {
 	TeamName string `json:"team_name"`
 }
 
+type InviteTokenResponse struct {
+	Token     string `json:"token"`
+	ExpiresAt string `json:"expires_at"`
+}
+
+type ClaimInviteRequest struct {
+	Token string `json:"token"`
+}
+
 // --- vaults / grants ---
 
 type CreateVaultRequest struct {

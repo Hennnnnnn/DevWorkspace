@@ -4,13 +4,17 @@ import (
 	"github.com/Hennnnnnn/DevWorkspace/internal/protocol"
 )
 
-// Invite adds a user directly to a team (admin).
-func Invite(user, team string) error {
+// Invite creates an invite token for a user to join a team (admin).
+func Invite(user, team string) (*protocol.InviteTokenResponse, error) {
 	cl, _, err := AuthedClient()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return cl.Post("/admin/invite", protocol.InviteRequest{Username: user, TeamName: team}, nil)
+	var resp protocol.InviteTokenResponse
+	if err := cl.Post("/admin/invite", protocol.InviteRequest{Username: user, TeamName: team}, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
 }
 
 // DeleteTeam permanently deletes a team and all its data (admin).
@@ -42,6 +46,15 @@ func Join(team string) error {
 		return err
 	}
 	return cl.Post("/teams/join", protocol.CreateTeamRequest{Name: team}, nil)
+}
+
+// ClaimInvite claims a team invite token. Activates user+device and adds to team.
+func ClaimInvite(token string) error {
+	cl, _, err := AuthedClient()
+	if err != nil {
+		return err
+	}
+	return cl.Post("/teams/claim", protocol.ClaimInviteRequest{Token: token}, nil)
 }
 
 // ListTeams returns the teams the caller belongs to.

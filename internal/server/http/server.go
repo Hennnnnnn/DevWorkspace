@@ -37,6 +37,7 @@ func (s *Server) Handler() http.Handler {
 	// Active user required.
 	mux.HandleFunc("GET /teams", s.activeAuthed(s.handleTeams))
 	mux.HandleFunc("POST /teams/join", s.activeAuthed(s.handleJoin))
+	mux.HandleFunc("POST /teams/claim", s.authed(s.handleClaimInvite))
 	mux.HandleFunc("GET /members", s.activeAuthed(s.handleMembers))
 	mux.HandleFunc("GET /vaults", s.activeAuthed(s.handleVaults))
 	mux.HandleFunc("GET /vaults/keyshares", s.activeAuthed(s.handleKeyShares))
