@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 
 	"github.com/Hennnnnnn/DevWorkspace/internal/client/config"
 	"github.com/spf13/cobra"
@@ -218,29 +219,57 @@ func updateRelease() error {
 }
 
 func writeAtomic(dst string, src io.Reader, mode os.FileMode) error {
-	// Windows: can't delete/replace a running .exe, but can rename it.
 	old := dst + ".old"
-	os.Remove(old) // ignore error
-	os.Rename(dst, old)
+	os.Remove(old)
 
-	tmp := dst + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
+	if err := os.Rename(dst, old); err == nil {
+		// rename succeeded — dst is free, write in place
+		tmp := dst + ".tmp"
+		f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
+		if err != nil {
+			os.Rename(old, dst)
+			return fmt.Errorf("create temp: %w", err)
+		}
+		if _, err := io.Copy(f, src); err != nil {
+			f.Close()
+			os.Remove(tmp)
+			os.Rename(old, dst)
+			return fmt.Errorf("write temp: %w", err)
+		}
+		if err := f.Close(); err != nil {
+			os.Remove(tmp)
+			os.Rename(old, dst)
+			return fmt.Errorf("close temp: %w", err)
+		}
+		if err := os.Rename(tmp, dst); err != nil {
+			os.Rename(old, dst)
+			return fmt.Errorf("replace: %w", err)
+		}
+		os.Remove(old)
+		return nil
+	}
+
+	// ponytail: rename failed (self-update: running exe locked).
+	// Fallback: write .new, batch script swaps after process exits.
+	newExe := dst + ".new"
+	f, err := os.OpenFile(newExe, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
 	if err != nil {
-		return fmt.Errorf("create temp: %w", err)
+		return fmt.Errorf("create new: %w", err)
 	}
 	if _, err := io.Copy(f, src); err != nil {
 		f.Close()
-		os.Remove(tmp)
-		return fmt.Errorf("write temp: %w", err)
+		os.Remove(newExe)
+		return fmt.Errorf("write new: %w", err)
 	}
-	if err := f.Close(); err != nil {
-		os.Remove(tmp)
-		return fmt.Errorf("close temp: %w", err)
+	f.Close()
+
+	bat := filepath.Join(os.TempDir(), "devsync-update.bat")
+	script := fmt.Sprintf("@echo off\r\n:loop\r\ntimeout /t 1 /nobreak >nul\r\nmove /y \"%s\" \"%s\" 2>nul\r\nif exist \"%s\" goto loop\r\ndel \"%%~f0\" 2>nul\r\n", newExe, dst, newExe)
+	if err := os.WriteFile(bat, []byte(script), 0644); err != nil {
+		return fmt.Errorf("write updater script: %w", err)
 	}
-	if err := os.Rename(tmp, dst); err != nil {
-		os.Rename(old, dst)
-		return fmt.Errorf("replace: %w", err)
-	}
-	os.Remove(old)
+	cmd := exec.Command("cmd", "/c", bat)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	cmd.Start()
 	return nil
 }
