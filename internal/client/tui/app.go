@@ -33,9 +33,27 @@ func (m rootModel) Init() tea.Cmd {
 		return base.Init()
 	}
 	if actions.IsUnlocked() {
-		return nil
+		// Registered devices can still be pending admin approval — re-check
+		// on every launch instead of trusting the cached config, or a
+		// pending user who quits and restarts lands straight on the menu.
+		return checkStartupStatus
 	}
 	return pushView(newUnlockView())
+}
+
+// startupStatusMsg carries the /whoami result checked once at launch.
+type startupStatusMsg struct {
+	username    string
+	fingerprint string
+	status      string
+}
+
+func checkStartupStatus() tea.Msg {
+	who, err := actions.WhoAmI()
+	if err != nil {
+		return startupStatusMsg{} // can't reach server — fall through to menu, it'll error there too
+	}
+	return startupStatusMsg{username: who.Username, fingerprint: who.Device.Fingerprint, status: who.Status}
 }
 
 func (m rootModel) top() tea.Model {
@@ -89,6 +107,13 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case popMsg:
 		if len(m.stack) > 1 {
 			m.stack = m.stack[:len(m.stack)-1]
+		}
+		return m, nil
+
+	case startupStatusMsg:
+		if msg.status != "" && msg.status != "active" {
+			m.stack = []tea.Model{newWaitingView(msg.username, msg.fingerprint)}
+			return m, m.stack[0].Init()
 		}
 		return m, nil
 
