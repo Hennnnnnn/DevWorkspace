@@ -214,3 +214,129 @@ func TestFingerprintStableAndDistinct(t *testing.T) {
 		t.Fatal("distinct keys share fingerprint")
 	}
 }
+
+func TestVerifyInvalidBase64(t *testing.T) {
+	kp := mustKP(t)
+	msg := []byte("test")
+	if Verify(kp.SignPub, msg, "!!!not-base64!!!") {
+		t.Fatal("invalid base64 signature verified")
+	}
+}
+
+func TestVerifyEmptySignature(t *testing.T) {
+	kp := mustKP(t)
+	msg := []byte("test")
+	if Verify(kp.SignPub, msg, "") {
+		t.Fatal("empty signature verified")
+	}
+}
+
+func TestKeyPairFromPrivates(t *testing.T) {
+	kp := mustKP(t)
+	got, err := KeyPairFromPrivates(kp.SignPriv, kp.BoxPriv[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.SignPriv.Equal(kp.SignPriv) || !got.SignPub.Equal(kp.SignPub) {
+		t.Fatal("signing keypair mismatch")
+	}
+	if got.BoxPriv != kp.BoxPriv || got.BoxPub != kp.BoxPub {
+		t.Fatal("box keypair mismatch")
+	}
+}
+
+func TestKeyPairFromPrivatesBadLengths(t *testing.T) {
+	kp := mustKP(t)
+	if _, err := KeyPairFromPrivates([]byte("short"), kp.BoxPriv[:]); err == nil {
+		t.Fatal("expected error for short signing key")
+	}
+	if _, err := KeyPairFromPrivates(kp.SignPriv, []byte("short")); err == nil {
+		t.Fatal("expected error for short box key")
+	}
+}
+
+func TestDecryptBlobTooShort(t *testing.T) {
+	vk, _ := NewVaultKey()
+	if _, err := DecryptBlob(vk, []byte("short")); err == nil {
+		t.Fatal("expected error for short ciphertext")
+	}
+}
+
+func TestDecryptBlobWrongKey(t *testing.T) {
+	vk1, _ := NewVaultKey()
+	vk2, _ := NewVaultKey()
+	ct, _ := EncryptBlob(vk1, []byte("secret"))
+	if _, err := DecryptBlob(vk2, ct); err == nil {
+		t.Fatal("wrong key decrypted blob")
+	}
+}
+
+func TestOpenVaultKeyBadSealedLength(t *testing.T) {
+	kp := mustKP(t)
+	if _, err := OpenVaultKey([]byte("short"), kp.BoxPub, kp.BoxPriv); err == nil {
+		t.Fatal("expected error for short sealed key")
+	}
+}
+
+func TestOpenVaultKeyBadOutputLength(t *testing.T) {
+	kp := mustKP(t)
+	sealed, _ := SealVaultKey(VaultKey{}, kp.BoxPub)
+	truncated := sealed[:len(sealed)-2]
+	if _, err := OpenVaultKey(truncated, kp.BoxPub, kp.BoxPriv); err == nil {
+		t.Fatal("expected error for truncated sealed key")
+	}
+}
+
+func TestDecryptPrivateKeyBadNonce(t *testing.T) {
+	ek := &EncryptedKey{Version: 1, Salt: make([]byte, 16), Nonce: []byte("short")}
+	if _, err := DecryptPrivateKey(ek, "pass"); err == nil {
+		t.Fatal("expected error for bad nonce length")
+	}
+}
+
+func TestDecryptPrivateKeyCorruptCiphertext(t *testing.T) {
+	kp := mustKP(t)
+	ek, _ := EncryptPrivateKey(kp, "correct horse")
+	ek.Ciphertext[0] ^= 0xff
+	if _, err := DecryptPrivateKey(ek, "correct horse"); err == nil {
+		t.Fatal("corrupt ciphertext decrypted")
+	}
+}
+
+func TestDecryptPrivateKeyCorruptSalt(t *testing.T) {
+	kp := mustKP(t)
+	ek, _ := EncryptPrivateKey(kp, "correct horse")
+	ek.Salt[0] ^= 0xff
+	if _, err := DecryptPrivateKey(ek, "correct horse"); err == nil {
+		t.Fatal("corrupt salt decrypted")
+	}
+}
+
+func TestEncryptBlobNondeterministic(t *testing.T) {
+	vk, _ := NewVaultKey()
+	plain := []byte("secret")
+	ct1, _ := EncryptBlob(vk, plain)
+	ct2, _ := EncryptBlob(vk, plain)
+	if bytes.Equal(ct1, ct2) {
+		t.Fatal("two encryptions produced identical ciphertext (nonce reuse?)")
+	}
+}
+
+func TestSealVaultKeyNondeterministic(t *testing.T) {
+	kp := mustKP(t)
+	vk, _ := NewVaultKey()
+	s1, _ := SealVaultKey(vk, kp.BoxPub)
+	s2, _ := SealVaultKey(vk, kp.BoxPub)
+	if bytes.Equal(s1, s2) {
+		t.Fatal("two seals produced identical output (ephemeral key reuse?)")
+	}
+}
+
+func TestEncryptPrivateKeyNondeterministic(t *testing.T) {
+	kp := mustKP(t)
+	ek1, _ := EncryptPrivateKey(kp, "pass")
+	ek2, _ := EncryptPrivateKey(kp, "pass")
+	if bytes.Equal(ek1.Ciphertext, ek2.Ciphertext) || bytes.Equal(ek1.Nonce, ek2.Nonce) {
+		t.Fatal("two encryptions produced identical output (nonce/CI reuse?)")
+	}
+}

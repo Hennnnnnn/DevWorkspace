@@ -272,4 +272,100 @@ func (d *testDevice) getRawAs(t *testing.T, base, user, claimFP, path string) in
 	return resp.StatusCode
 }
 
+func TestAuthMiddleware(t *testing.T) {
+	driver, dsn := "sqlite", ""
+	if pg := os.Getenv("DEVSYNC_TEST_DATABASE_URL"); pg != "" {
+		driver, dsn = "pgx", pg
+	} else {
+		path := filepath.Join(t.TempDir(), "test.db")
+		dsn = "file:" + path + "?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
+	}
+	ctx := context.Background()
+	if err := db.Migrate(ctx, driver, dsn); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	st, err := store.New(ctx, driver, dsn)
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	defer st.Close()
+
+	ts := httptest.NewServer(srvhttp.New(st).Handler())
+	defer ts.Close()
+
+	admin := newTestDevice(t)
+	registerDevice(t, ts.URL, "alice", admin)
+	adminUser, _ := st.GetUserByUsername(ctx, "alice")
+	_ = st.SetUserStatus(ctx, adminUser.ID, "active")
+	devs, _ := st.ListDevices(ctx, adminUser.ID)
+	_ = st.SetDeviceStatus(ctx, devs[0].ID, "active")
+	_ = st.SetUserAdmin(ctx, adminUser.ID, true)
+
+	// Test 1: missing auth headers
+	resp, _ := http.Get(ts.URL + "/whoami")
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for missing auth headers, got %d", resp.StatusCode)
+	}
+
+	// Test 2: bad timestamp format
+	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/whoami", nil)
+	req.Header.Set(protocol.HeaderDevice, admin.fp)
+	req.Header.Set(protocol.HeaderTimestamp, "not-a-number")
+	req.Header.Set(protocol.HeaderSignature, "AA==")
+	resp, _ = http.DefaultClient.Do(req)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for bad timestamp, got %d", resp.StatusCode)
+	}
+
+	// Test 3: unknown device fingerprint
+	req, _ = http.NewRequest(http.MethodGet, ts.URL+"/whoami", nil)
+	req.Header.Set(protocol.HeaderDevice, "SHA256:unknownfp")
+	req.Header.Set(protocol.HeaderTimestamp, strconv.FormatInt(time.Now().Unix(), 10))
+	req.Header.Set(protocol.HeaderSignature, "AA==")
+	resp, _ = http.DefaultClient.Do(req)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for unknown device, got %d", resp.StatusCode)
+	}
+
+	// Test 4: invalid signature base64
+	req, _ = http.NewRequest(http.MethodGet, ts.URL+"/whoami", nil)
+	req.Header.Set(protocol.HeaderDevice, admin.fp)
+	req.Header.Set(protocol.HeaderTimestamp, strconv.FormatInt(time.Now().Unix(), 10))
+	req.Header.Set(protocol.HeaderSignature, "!!!bad-base64!!!")
+	resp, _ = http.DefaultClient.Do(req)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for bad signature base64, got %d", resp.StatusCode)
+	}
+
+	// Test 5: anti-replay — timestamp too old
+	code := admin.getRawTS(t, ts.URL, "alice", "/whoami", time.Now().Unix()-1000)
+	if code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for stale timestamp, got %d", code)
+	}
+
+	// Test 6: anti-replay — timestamp too new
+	code = admin.getRawTS(t, ts.URL, "alice", "/whoami", time.Now().Unix()+1000)
+	if code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for future timestamp, got %d", code)
+	}
+
+	// Test 7: non-admin hitting admin endpoint
+	nonAdmin := newTestDevice(t)
+	registerDevice(t, ts.URL, "bob", nonAdmin)
+	bobUser, _ := st.GetUserByUsername(ctx, "bob")
+	_ = st.SetUserStatus(ctx, bobUser.ID, "active")
+	bobDevs, _ := st.ListDevices(ctx, bobUser.ID)
+	_ = st.SetDeviceStatus(ctx, bobDevs[0].ID, "active")
+	code = nonAdmin.postRaw(t, ts.URL, "bob", "/admin/create-team", protocol.CreateTeamRequest{Name: "should-fail"})
+	if code != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-admin on admin endpoint, got %d", code)
+	}
+
+	// Test 8: timestamp right at boundary — within skew should pass
+	code = admin.getRawTS(t, ts.URL, "alice", "/whoami", time.Now().Unix())
+	if code != http.StatusOK {
+		t.Fatalf("expected 200 for current timestamp, got %d", code)
+	}
+}
+
 var _ = ed25519.PublicKeySize

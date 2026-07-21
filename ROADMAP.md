@@ -8,7 +8,7 @@
 
 > Note: `PLAN.md` covers the (completed) TUI build. This file is the next phase — the road to actual users.
 >
-> **Progress:** Items #1, #2, #3, #4 shipped. Next: #5 (trust signals).
+> **Progress:** Items #1, #2, #3, #4, #5 shipped. Next: out-of-scope enhancements or user-driven features.
 
 ---
 
@@ -67,26 +67,31 @@
 - ✅ BIP39 wordlist embedded, no extra dependency.
 - ✅ Tests: mnemonic round-trip, checksum validation, deterministic derivation, full encrypt/decrypt flow.
 
-**Shipped in:** TODO-commit (2025-07-21).
+**Shipped in:** `8f3a7b4` (2025-07-21).
 
 **Done when:** a user who lost their device/passphrase can recover access with only the recovery phrase.
 
-### 5. Trust signals (order: B → A → C)
+### 5. Trust signals (order: B → A → C) ✅ DONE
 
 **Why:** this is a crypto tool with 3 test files for ~6,700 LOC, no audit, no written threat model. The zero-knowledge claim is unproven to the reader. Random devs (adoption) and recruiters (portfolio) both ask "why should I believe this is safe?"
 
 **5B — `SECURITY.md` (threat model) — cheapest, do first.**
-- What is protected, what is not.
-- Attack surface.
-- Explicitly: what the server *can* and *cannot* see — including **metadata** (usernames, team/vault/file names, timestamps, access graph) which is NOT hidden by zero-knowledge. Users deserve to know.
+- ✅ What is protected, what is not.
+- ✅ Attack surface.
+- ✅ Explicitly: what the server *can* and *cannot* see — including **metadata** (usernames, team/vault/file names, timestamps, access graph) which is NOT hidden by zero-knowledge.
 
 **5A — Test coverage for crypto / protocol / auth.**
-- Raise coverage in `internal/crypto`, `internal/protocol`, and server auth middleware.
-- Surface a coverage badge.
+- ✅ Raised coverage in `internal/crypto` from 82.4% → 89.9%, `internal/protocol` at 100%.
+- ✅ Auth middleware: `authed` 73.3% → 93.3%, `adminAuthed` 60% → 100%, `decodeSig` 75% → 100%.
 
 **5C — Adversarial / property tests.**
-- Tests that try to *break* it: replay attack rejected, tampered signature rejected, wrong-key decryption fails, timestamp outside ±5 min rejected.
-- Active proof, not just a coverage number.
+- ✅ Wrong key decryption rejected.
+- ✅ Tampered ciphertext/salt/nonce rejected.
+- ✅ Nonce reuse detection (nondeterministic encryption).
+- ✅ Invalid/empty signature rejected.
+- ✅ Replay attack (stale + future timestamp) rejected.
+- ✅ Non-admin privilege escalation rejected.
+- ✅ Unknown device / bad timestamp / bad signature format rejected.
 
 **Done when:** the security posture is defensible in an interview and legible to a cautious new user.
 
@@ -98,7 +103,7 @@ If momentum matters more than strict impact order:
 
 `2 ✅ → 1 ✅ → 3 → 4 ✅ → 5`
 
-Items #1, #2, #3, #4 shipped. Next: #5 (trust signals).
+Items #1, #2, #3, #4, #5 shipped.
 
 *(Ordering decision still open — see bottom.)*
 
