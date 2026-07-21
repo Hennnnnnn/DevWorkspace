@@ -43,9 +43,10 @@ type ApproveResult struct {
 }
 
 // Approve approves a pending user after their fingerprint has been verified
-// out-of-band, then re-shares every vault key the admin holds to the user's
-// devices (best-effort).
-func Approve(user, fingerprint string) (*ApproveResult, error) {
+// out-of-band, then re-shares vault keys the admin holds to the user's
+// devices (best-effort). vaults nil = every vault the admin can open;
+// otherwise only the named vaults.
+func Approve(user, fingerprint string, vaults []string) (*ApproveResult, error) {
 	if fingerprint == "" {
 		return nil, fmt.Errorf("fingerprint is required; confirm it out-of-band with the user")
 	}
@@ -72,12 +73,19 @@ func Approve(user, fingerprint string) (*ApproveResult, error) {
 		// Approval succeeded; sharing is best-effort with guidance.
 		return &ApproveResult{ShareNote: fmt.Sprintf("could not enumerate %s's devices for key sharing: %v", user, err)}, nil
 	}
-	var vaults protocol.VaultList
-	if err := cl.Get("/vaults", nil, &vaults); err != nil {
+	var all protocol.VaultList
+	if err := cl.Get("/vaults", nil, &all); err != nil {
 		return nil, err
 	}
+	wanted := map[string]bool{}
+	for _, name := range vaults {
+		wanted[name] = true
+	}
 	shared := 0
-	for _, v := range vaults.Vaults {
+	for _, v := range all.Vaults {
+		if vaults != nil && !wanted[v.Name] {
+			continue
+		}
 		vk, keyVersion, err := fetchVaultKey(cl, v.Name)
 		if err != nil {
 			continue // admin doesn't hold this one

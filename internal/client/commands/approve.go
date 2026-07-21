@@ -16,7 +16,7 @@ func newApproveCmd() *cobra.Command {
 		Long:  "Approve a pending user and re-share vault keys to their devices.\n\nArguments:\n  <user>  Username to approve",
 		Args:  expectArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			res, err := actions.Approve(args[0], fingerprint)
+			res, err := actions.Approve(args[0], fingerprint, nil)
 			if err != nil {
 				return err
 			}

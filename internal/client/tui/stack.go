@@ -15,3 +15,8 @@ func pushView(model tea.Model) tea.Cmd {
 
 // popView is a Cmd that navigates back to the previous view.
 func popView() tea.Msg { return popMsg{} }
+
+// replaceViewMsg asks the root model to replace the ENTIRE stack with model.
+// Used by the onboarding flow (wizard → waiting → menu) where "back" makes
+// no sense.
+type replaceViewMsg struct{ model tea.Model }

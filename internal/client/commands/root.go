@@ -25,7 +25,7 @@ func init() {
 }
 
 type updateCache struct {
-	Latest string    `json:"latest"`
+	Latest  string    `json:"latest"`
 	Checked time.Time `json:"checked"`
 }
 
@@ -44,7 +44,9 @@ func checkUpdate() {
 			return
 		}
 		defer resp.Body.Close()
-		var commit struct{ Sha string `json:"sha"` }
+		var commit struct {
+			Sha string `json:"sha"`
+		}
 		if err := json.NewDecoder(resp.Body).Decode(&commit); err != nil || commit.Sha == "" {
 			return
 		}
@@ -60,7 +62,9 @@ func checkUpdate() {
 			return
 		}
 		defer resp.Body.Close()
-		var rel struct{ TagName string `json:"tag_name"` }
+		var rel struct {
+			TagName string `json:"tag_name"`
+		}
 		if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil || rel.TagName == "" {
 			return
 		}
@@ -95,19 +99,34 @@ func NewRoot() *cobra.Command {
 			checkUpdate()
 		},
 	}
-	root.AddCommand(
-		newUpdateCmd(),
-		newSetupCmd(),
-		newGuideCmd(),
-		// setup / identity
-		newConfigCmd(),
-		newInitCmd(),
-		newRegisterCmd(),
-		newBootstrapAdminCmd(),
-		newSetAdminCmd(),
-		newWhoAmICmd(),
-		newUnlockCmd(),
-		// team / vault admin
+	root.AddGroup(
+		&cobra.Group{ID: "daily", Title: "Daily commands:"},
+		&cobra.Group{ID: "admin", Title: "Team & vault admin:"},
+		&cobra.Group{ID: "advanced", Title: "Advanced/setup (usually not needed — just run `devsync`):"},
+	)
+
+	group := func(id string, cmds ...*cobra.Command) []*cobra.Command {
+		for _, c := range cmds {
+			c.GroupID = id
+		}
+		return cmds
+	}
+	hidden := func(cmds ...*cobra.Command) []*cobra.Command {
+		for _, c := range cmds {
+			c.Hidden = true
+		}
+		return cmds
+	}
+
+	root.AddCommand(group("daily",
+		newPushCmd(),
+		newPullCmd(),
+		newHistoryCmd(),
+		newCheckoutCmd(),
+		newRmCmd(),
+		newAuditCmd(),
+	)...)
+	root.AddCommand(group("admin",
 		newCreateTeamCmd(),
 		newDeleteTeamCmd(),
 		newInviteCmd(),
@@ -118,17 +137,24 @@ func NewRoot() *cobra.Command {
 		newCreateVaultCmd(),
 		newGrantCmd(),
 		newRevokeCmd(),
-		// files
-		newPushCmd(),
-		newPullCmd(),
-		newHistoryCmd(),
-		newCheckoutCmd(),
-		newRmCmd(),
-		newAuditCmd(),
-		// device
+	)...)
+	root.AddCommand(group("advanced",
+		newUpdateCmd(),
+		newGuideCmd(),
+		newConfigCmd(),
+		newInitCmd(),
+		newRegisterCmd(),
+		newSetAdminCmd(),
+		newWhoAmICmd(),
+		newUnlockCmd(),
 		newDeviceCmd(),
-		// recovery
 		newRecoverCmd(),
-	)
+	)...)
+	// Still functional for scripts/CI, but no longer advertised: the TUI
+	// wizard replaces them.
+	root.AddCommand(hidden(
+		newSetupCmd(),
+		newBootstrapAdminCmd(),
+	)...)
 	return root
 }

@@ -15,7 +15,7 @@ func newUnlockCmd() *cobra.Command {
 		Use:   "unlock",
 		Short: "Unlock the device key into the agent for a period",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			pass, err := promptPassphrase("Device passphrase: ")
+			pass, err := promptPassphrase("Passphrase to unlock this device: ")
 			if err != nil {
 				return err
 			}
@@ -26,7 +26,7 @@ func newUnlockCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().DurationVar(&ttl, "timeout", 15*time.Minute, "how long the key stays unlocked")
+	cmd.Flags().DurationVar(&ttl, "timeout", 8*time.Hour, "how long the key stays unlocked")
 
 	lock := &cobra.Command{
 		Use:   "lock",

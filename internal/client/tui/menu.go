@@ -1,8 +1,12 @@
 package tui
 
 import (
+	"fmt"
+
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/Hennnnnnn/DevWorkspace/internal/client/actions"
 )
 
 // menuItem is a top-level menu entry. It satisfies list.Item and knows how
@@ -39,10 +43,47 @@ func newMenuModel(width, height int) menuModel {
 	return menuModel{list: newTopMenu(width, height)}
 }
 
-func (m menuModel) Init() tea.Cmd { return nil }
+// pendingCountMsg carries the number of pending members across the caller's
+// teams, for the badge on the Teams menu entry.
+type pendingCountMsg struct{ count int }
+
+func loadPendingCount() tea.Msg {
+	if !actions.IsUnlocked() {
+		return pendingCountMsg{}
+	}
+	teams, err := actions.ListTeams()
+	if err != nil {
+		return pendingCountMsg{}
+	}
+	count := 0
+	for _, t := range teams {
+		ms, err := actions.ListMembers(t.Name, true)
+		if err != nil {
+			continue
+		}
+		count += len(ms)
+	}
+	return pendingCountMsg{count: count}
+}
+
+func (m menuModel) Init() tea.Cmd { return loadPendingCount }
 
 func (m menuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case pendingCountMsg:
+		if msg.count > 0 {
+			items := m.list.Items()
+			for i, it := range items {
+				mi, ok := it.(menuItem)
+				if ok && mi.title == "Teams" {
+					mi.desc = fmt.Sprintf("teams, members — %s", warningStyle.Render(fmt.Sprintf("%d pending approval", msg.count)))
+					items[i] = mi
+				}
+			}
+			m.list.SetItems(items)
+		}
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.list.SetSize(msg.Width, msg.Height)
 		return m, nil

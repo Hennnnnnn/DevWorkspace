@@ -9,7 +9,7 @@ import (
 	"github.com/Hennnnnnn/DevWorkspace/internal/client/actions"
 )
 
-const unlockTTL = 15 * time.Minute
+const unlockTTL = 8 * time.Hour
 
 // unlockedMsg tells the root to pop the unlock view after a successful unlock.
 type unlockResultMsg struct{ err error }
@@ -63,7 +63,7 @@ func (m unlockModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m unlockModel) View() string {
-	s := "\n  " + warningStyle.Render("Locked") + " — enter your device passphrase\n\n  " + m.input.View() + "\n"
+	s := "\n  " + warningStyle.Render("Locked") + " — enter your passphrase to unlock this device\n\n  " + m.input.View() + "\n"
 	if m.working {
 		s += "\n  unlocking…\n"
 	}

@@ -87,8 +87,8 @@ func newFilesView(vault string, width, height int) tea.Model {
 	l.AdditionalShortHelpKeys = func() []key.Binding {
 		return []key.Binding{
 			helpKey("enter", "history"),
-			helpKey("p", "pull"),
-			helpKey("u", "push"),
+			helpKey("p", "pull (download & decrypt)"),
+			helpKey("u", "push (encrypt & upload)"),
 			helpKey("d", "delete"),
 			helpKey("U", "unlock"),
 			helpKey("r", "refresh"),

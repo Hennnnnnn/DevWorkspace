@@ -6,6 +6,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/Hennnnnnn/DevWorkspace/internal/client/actions"
+	"github.com/Hennnnnnn/DevWorkspace/internal/client/config"
+	"github.com/Hennnnnnn/DevWorkspace/internal/client/keystore"
 )
 
 // rootModel drives a lazygit/k9s-style drill-down stack: top menu -> list ->
@@ -17,10 +19,19 @@ type rootModel struct {
 }
 
 func newRootModel() rootModel {
+	// First run (no keystore or never registered) → onboarding wizard.
+	cfg, _ := config.Load()
+	if !keystore.Exists() || cfg == nil || cfg.Username == "" {
+		return rootModel{stack: []tea.Model{newWizardView()}}
+	}
 	return rootModel{stack: []tea.Model{newMenuModel(0, 0)}}
 }
 
 func (m rootModel) Init() tea.Cmd {
+	base := m.stack[0]
+	if _, onboarding := base.(wizardModel); onboarding {
+		return base.Init()
+	}
 	if actions.IsUnlocked() {
 		return nil
 	}
@@ -71,6 +82,14 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.stack = m.stack[:len(m.stack)-1]
 		}
 		return m, nil
+
+	case replaceViewMsg:
+		if m.width > 0 && m.height > 0 {
+			updated, _ := msg.model.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+			msg.model = updated
+		}
+		m.stack = []tea.Model{msg.model}
+		return m, msg.model.Init()
 	}
 
 	updated, cmd := m.top().Update(msg)
