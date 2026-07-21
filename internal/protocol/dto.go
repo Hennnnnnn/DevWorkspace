@@ -53,8 +53,9 @@ type CreateTeamRequest struct {
 }
 
 type Team struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Creator string `json:"creator,omitempty"`
 }
 
 type TeamList struct {

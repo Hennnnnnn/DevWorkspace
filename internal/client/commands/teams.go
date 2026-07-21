@@ -100,7 +100,7 @@ func newTeamsCmd() *cobra.Command {
 				return nil
 			}
 			for _, t := range teams {
-				fmt.Println(t.Name)
+				fmt.Printf("%s (created by %s)\n", t.Name, t.Creator)
 			}
 			return nil
 		},

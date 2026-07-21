@@ -24,13 +24,17 @@ type teamItem struct {
 
 func (i teamItem) Title() string { return i.t.Name }
 func (i teamItem) Description() string {
+	creator := ""
+	if i.t.Creator != "" {
+		creator = " by " + i.t.Creator
+	}
 	if i.joined {
-		return i.t.ID
+		return "[joined]" + creator
 	}
 	if i.pending {
-		return "[pending approval]"
+		return "[pending approval]" + creator
 	}
-	return "[not joined]"
+	return "[not joined]" + creator
 }
 func (i teamItem) FilterValue() string { return i.t.Name }
 

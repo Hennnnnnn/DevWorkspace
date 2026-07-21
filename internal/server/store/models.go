@@ -20,8 +20,9 @@ type Device struct {
 }
 
 type Team struct {
-	ID   string
-	Name string
+	ID        string
+	Name      string
+	CreatedBy string
 }
 
 type Vault struct {

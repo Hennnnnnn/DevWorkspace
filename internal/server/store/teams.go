@@ -16,10 +16,15 @@ func (s *Store) CreateTeam(ctx context.Context, name string) (*Team, error) {
 	return &t, nil
 }
 
+const creatorSubquery = `COALESCE((SELECT u.username FROM audit_log a
+		 JOIN users u ON u.id = a.user_id
+		 WHERE a.target = t.name AND a.action = 'create_team'
+		 ORDER BY a.created_at DESC LIMIT 1), '')`
+
 func (s *Store) GetTeamByName(ctx context.Context, name string) (*Team, error) {
 	var t Team
 	err := s.db.QueryRowContext(ctx, s.rebind(
-		`SELECT id, name FROM teams WHERE name=?`), name).Scan(&t.ID, &t.Name)
+		`SELECT id, name, `+creatorSubquery+` FROM teams t WHERE name=?`), name).Scan(&t.ID, &t.Name, &t.CreatedBy)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -54,7 +59,7 @@ func (s *Store) ActivatePendingMemberships(ctx context.Context, userID string) e
 
 func (s *Store) ListAllTeams(ctx context.Context) ([]Team, error) {
 	rows, err := s.db.QueryContext(ctx, s.rebind(
-		`SELECT id, name FROM teams ORDER BY name`))
+		`SELECT id, name, `+creatorSubquery+` FROM teams t ORDER BY name`))
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +67,7 @@ func (s *Store) ListAllTeams(ctx context.Context) ([]Team, error) {
 	var out []Team
 	for rows.Next() {
 		var t Team
-		if err := rows.Scan(&t.ID, &t.Name); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.CreatedBy); err != nil {
 			return nil, err
 		}
 		out = append(out, t)
@@ -73,7 +78,7 @@ func (s *Store) ListAllTeams(ctx context.Context) ([]Team, error) {
 // ListTeamsForUser returns teams the user is a member of, filtered by status
 // (empty=all, "active", "pending").
 func (s *Store) ListTeamsForUser(ctx context.Context, userID, status string) ([]Team, error) {
-	q := `SELECT t.id, t.name FROM teams t
+	q := `SELECT t.id, t.name, ` + creatorSubquery + ` FROM teams t
 		 JOIN team_members m ON m.team_id = t.id
 		 WHERE m.user_id=?`
 	if status != "" {
@@ -92,7 +97,7 @@ func (s *Store) ListTeamsForUser(ctx context.Context, userID, status string) ([]
 	var out []Team
 	for rows.Next() {
 		var t Team
-		if err := rows.Scan(&t.ID, &t.Name); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.CreatedBy); err != nil {
 			return nil, err
 		}
 		out = append(out, t)

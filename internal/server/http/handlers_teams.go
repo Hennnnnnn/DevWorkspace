@@ -26,7 +26,7 @@ func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) {
 	// Creator becomes active member.
 	_ = s.store.AddTeamMember(r.Context(), t.ID, userOf(r).ID, "active")
 	_ = s.store.Log(r.Context(), userOf(r).ID, deviceOf(r).ID, "", "create_team", req.Name)
-	writeJSON(w, http.StatusOK, protocol.Team{ID: t.ID, Name: t.Name})
+	writeJSON(w, http.StatusOK, protocol.Team{ID: t.ID, Name: t.Name, Creator: userOf(r).Username})
 }
 
 func (s *Server) handleTeams(w http.ResponseWriter, r *http.Request) {
@@ -46,7 +46,7 @@ func (s *Server) handleTeams(w http.ResponseWriter, r *http.Request) {
 	}
 	out := protocol.TeamList{}
 	for _, t := range teams {
-		out.Teams = append(out.Teams, protocol.Team{ID: t.ID, Name: t.Name})
+		out.Teams = append(out.Teams, protocol.Team{ID: t.ID, Name: t.Name, Creator: t.CreatedBy})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
