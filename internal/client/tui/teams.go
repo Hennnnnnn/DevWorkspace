@@ -122,9 +122,8 @@ func newTeamsView(width, height int) tea.Model {
 	l.DisableQuitKeybindings()
 	l.AdditionalShortHelpKeys = func() []key.Binding {
 		return []key.Binding{
-			helpKey("enter", "members / join"),
+			helpKey("enter", "members / info"),
 			helpKey("c", "create"),
-			helpKey("j", "join selected"),
 			helpKey("d", "delete"),
 			helpKey("r", "refresh"),
 		}
@@ -193,18 +192,12 @@ func (m teamsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if it.joined {
 				return m, pushView(newMembersView(it.t.Name, m.width, m.height))
 			}
-			return m, doJoinTeam(it.t.Name)
+			// ponytail: room-based ownership — joining is invite-only. Hint the flow.
+			m.statusGen++
+			m.status = warningStyle.Render("invite-only — ask the owner for a token, then run: devsync join <token>")
+			return m, tea.Batch(clearStatusCmd(4*time.Second, m.statusGen))
 		case "c":
 			return m, pushView(newTeamInputView("create"))
-		case "j":
-			it, ok := m.list.SelectedItem().(teamItem)
-			if !ok {
-				break
-			}
-			if it.joined {
-				break
-			}
-			return m, doJoinTeam(it.t.Name)
 		case "d":
 			it, ok := m.list.SelectedItem().(teamItem)
 			if !ok || !it.joined {
@@ -253,15 +246,6 @@ func doDeleteTeam(name string) tea.Cmd {
 			return actionDoneMsg{err: err}
 		}
 		return actionDoneMsg{ok: fmt.Sprintf("team %q deleted", name)}
-	}
-}
-
-func doJoinTeam(name string) tea.Cmd {
-	return func() tea.Msg {
-		if err := actions.Join(name); err != nil {
-			return actionDoneMsg{err: err}
-		}
-		return actionDoneMsg{ok: fmt.Sprintf("joined team %q", name)}
 	}
 }
 

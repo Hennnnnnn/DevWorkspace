@@ -39,20 +39,8 @@ func CreateTeam(name string) (*protocol.Team, error) {
 	return &t, nil
 }
 
-// Join requests to join an existing team (removed — use invite tokens only).
-// Kept for backward compatibility in TUI; always returns an error directing to
-// invite flow.
-func Join(team string) error {
-	cl, _, err := AuthedClient()
-	if err != nil {
-		return err
-	}
-	// ponytail: deprecated endpoint removed; always fail with guidance.
-	_ = cl.Post("/teams/join", protocol.CreateTeamRequest{Team: team}, nil)
-	return nil // never reaches; let caller handle
-}
-
 // ClaimInvite claims a team invite token. Activates user+device and adds to team.
+// ponytail: room-based ownership — joining is invite-only (owner issues token).
 func ClaimInvite(token string) error {
 	cl, _, err := AuthedClient()
 	if err != nil {
@@ -115,7 +103,7 @@ func ListMembers(team string, pending bool) ([]protocol.Member, error) {
 		q.Set("pending", "true")
 	}
 	var out protocol.MemberList
-	if err := cl.Get("/members", q, &out); err != nil {
+	if err := cl.Get("/teams/members", q, &out); err != nil {
 		return nil, err
 	}
 	return out.Members, nil

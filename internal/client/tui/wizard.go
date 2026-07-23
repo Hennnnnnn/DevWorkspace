@@ -20,7 +20,7 @@ type wizardStep int
 const (
 	stepInputs   wizardStep = iota // username + passphrase + confirm
 	stepRecovery                   // show 24-word phrase, explicit confirm
-	stepBusy                       // register → bootstrap → unlock → auto-create
+	stepBusy                       // register → unlock → auto-create
 	stepRetry                      // username taken: re-ask username only
 )
 
@@ -29,7 +29,7 @@ type wizardInitMsg struct {
 	err error
 }
 
-// wizardSetupMsg is the outcome of register→bootstrap→unlock→auto-create.
+// wizardSetupMsg is the outcome of register→unlock→auto-create.
 type wizardSetupMsg struct {
 	usernameTaken bool
 	fingerprint   string

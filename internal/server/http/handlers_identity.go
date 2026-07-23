@@ -12,8 +12,9 @@ import (
 )
 
 // handleRegister creates a user+device (first device) or adds a device to an
-// existing user. First device is pending (admin approves). A second device that
-// carries a valid link signature from an existing active device is auto-active.
+// existing user. New users are active immediately (room-based ownership: no
+// global admin approval). A second device that carries a valid link signature
+// from an existing active device is auto-active; otherwise pending.
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	var req protocol.RegisterRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {

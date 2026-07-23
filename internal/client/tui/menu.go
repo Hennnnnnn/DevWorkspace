@@ -23,7 +23,7 @@ func (i menuItem) FilterValue() string { return i.title }
 func newTopMenu(width, height int) list.Model {
 	items := []list.Item{
 		menuItem{title: "Vaults", desc: "browse vaults and files", open: func() tea.Model { return newVaultsView(width, height) }},
-		menuItem{title: "Teams", desc: "teams, members, approvals", open: func() tea.Model { return newTeamsView(width, height) }},
+		menuItem{title: "Teams", desc: "teams, members, invites", open: func() tea.Model { return newTeamsView(width, height) }},
 		menuItem{title: "Devices", desc: "your registered devices", open: func() tea.Model { return newDevicesView(width, height) }},
 		menuItem{title: "Audit", desc: "vault audit log", open: func() tea.Model { return newAuditPickerView(width, height) }},
 	}
