@@ -11,7 +11,7 @@ import (
 var ErrNotFound = errors.New("not found")
 
 // CreateUserWithDevice inserts a new user and their first device in one tx.
-// Used by register (status pending).
+// Used by register (status active — room-based ownership, no global approval).
 func (s *Store) CreateUserWithDevice(ctx context.Context, u User, d Device) (userID, deviceID string, err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -60,11 +60,6 @@ func (s *Store) GetUserByUsername(ctx context.Context, username string) (*User, 
 		return nil, err
 	}
 	return &u, nil
-}
-
-func (s *Store) SetUserStatus(ctx context.Context, userID, status string) error {
-	_, err := s.db.ExecContext(ctx, s.rebind(`UPDATE users SET status=? WHERE id=?`), status, userID)
-	return err
 }
 
 // GetDeviceByFingerprint returns the device and its owning user.

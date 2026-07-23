@@ -3,8 +3,6 @@
 package tui
 
 import (
-	"fmt"
-
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/Hennnnnnn/DevWorkspace/internal/client/actions"
@@ -18,7 +16,6 @@ type rootModel struct {
 	stack  []tea.Model
 	width  int
 	height int
-	banner string
 }
 
 func newRootModel() rootModel {
@@ -35,25 +32,10 @@ func (m rootModel) Init() tea.Cmd {
 	if _, onboarding := base.(wizardModel); onboarding {
 		return base.Init()
 	}
-	if actions.IsUnlocked() {
-		return checkStartupStatus
+	if !actions.IsUnlocked() {
+		return pushView(newUnlockView())
 	}
-	return pushView(newUnlockView())
-}
-
-// startupStatusMsg carries the /whoami result checked once at launch.
-type startupStatusMsg struct {
-	username    string
-	fingerprint string
-	status      string
-}
-
-func checkStartupStatus() tea.Msg {
-	who, err := actions.WhoAmI()
-	if err != nil {
-		return startupStatusMsg{} // can't reach server — fall through to menu, it'll error there too
-	}
-	return startupStatusMsg{username: who.Username, fingerprint: who.Device.Fingerprint, status: who.Status}
+	return nil
 }
 
 func (m rootModel) top() tea.Model {
@@ -110,12 +92,6 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case startupStatusMsg:
-		if msg.status != "" && msg.status != "active" {
-			m.banner = warningStyle.Render(fmt.Sprintf("Device %s is %s — ask admin to activate it", msg.fingerprint, msg.status))
-		}
-		return m, nil
-
 	case replaceViewMsg:
 		if m.width > 0 && m.height > 0 {
 			h := m.height - headerHeight
@@ -135,11 +111,7 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m rootModel) View() string {
-	banner := ""
-	if m.banner != "" {
-		banner = "\n" + m.banner + "\n"
-	}
-	return RenderHeader(m.width) + banner + m.top().View()
+	return RenderHeader(m.width) + m.top().View()
 }
 
 // Run starts the TUI.

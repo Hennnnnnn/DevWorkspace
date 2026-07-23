@@ -68,17 +68,14 @@ func (s *Server) authed(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// activeAuthed is authed + requires the device and user to be active.
+// activeAuthed is authed + requires the device to be active. User activation is
+// gone (room-based ownership: every authenticated user is usable immediately),
+// so only the device state is gated here — a revoked or unsigned device stays
+// blocked.
 func (s *Server) activeAuthed(next http.HandlerFunc) http.HandlerFunc {
 	return s.authed(func(w http.ResponseWriter, r *http.Request) {
-		d := deviceOf(r)
-		u := userOf(r)
-		if d.Status != "active" {
+		if deviceOf(r).Status != "active" {
 			writeErr(w, http.StatusForbidden, "device not active")
-			return
-		}
-		if u.Status != "active" {
-			writeErr(w, http.StatusForbidden, "user not active")
 			return
 		}
 		next(w, r)

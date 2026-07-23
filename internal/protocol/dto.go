@@ -24,7 +24,7 @@ type RegisterRequest struct {
 type RegisterResponse struct {
 	UserID   string `json:"user_id"`
 	DeviceID string `json:"device_id"`
-	Status   string `json:"status"` // pending | active
+	Status   string `json:"status"` // active (new users are usable immediately)
 }
 
 type Device struct {

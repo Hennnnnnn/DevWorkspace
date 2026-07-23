@@ -2,10 +2,7 @@ package main
 
 import (
 	"context"
-	"crypto/ed25519"
-	"encoding/base64"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -13,7 +10,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Hennnnnnn/DevWorkspace/internal/crypto"
 	"github.com/Hennnnnnn/DevWorkspace/internal/db"
 	"github.com/Hennnnnnn/DevWorkspace/internal/server/config"
 	httpsrv "github.com/Hennnnnnn/DevWorkspace/internal/server/http"
@@ -23,12 +19,10 @@ import (
 func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
-		case "create-admin":
-			runCreateAdmin(os.Args[2:])
 		case "serve":
 			runServe()
 		default:
-			log.Fatalf("unknown command %q (want: serve | create-admin)", os.Args[1])
+			log.Fatalf("unknown command %q (want: serve)", os.Args[1])
 		}
 		return
 	}
@@ -80,36 +74,4 @@ func runServe() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("shutdown: %v", err)
 	}
-}
-
-// runCreateAdmin bootstraps the first active user from server-side shell access.
-// Activates an existing pending user+device. Zero race window: requires
-// shell on the server. Usage: devsync-server create-admin <username> <fingerprint>
-func runCreateAdmin(args []string) {
-	if len(args) < 2 {
-		log.Fatalf("usage: devsync-server create-admin <username> <fingerprint>")
-	}
-	username, fingerprint := args[0], args[1]
-	ctx := context.Background()
-	st, _ := mustStore(ctx)
-	defer st.Close()
-
-	device, user, err := st.GetDeviceByFingerprint(ctx, fingerprint)
-	if err != nil {
-		log.Fatalf("no device with fingerprint %s — run `devsync register` first", fingerprint)
-	}
-	if user.Username != username {
-		log.Fatalf("fingerprint belongs to %q not %q", user.Username, username)
-	}
-	// Sanity: fingerprint must match the stored signing key.
-	if crypto.Fingerprint(ed25519.PublicKey(device.SignPubKey)) != fingerprint {
-		log.Fatalf("stored key does not match fingerprint (corrupt?)")
-	}
-	if err := st.SetUserStatus(ctx, user.ID, "active"); err != nil {
-		log.Fatalf("activate user: %v", err)
-	}
-	if err := st.SetDeviceStatus(ctx, device.ID, "active"); err != nil {
-		log.Fatalf("activate device: %v", err)
-	}
-	fmt.Printf("user %q activated (device %s)\n", username, base64.RawStdEncoding.EncodeToString([]byte(device.ID))[:8])
 }

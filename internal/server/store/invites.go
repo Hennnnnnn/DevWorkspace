@@ -15,8 +15,10 @@ func (s *Store) CreateInviteToken(ctx context.Context, token, teamID, username, 
 	return err
 }
 
-// ClaimInviteToken atomically: validates token, marks used, activates user+device,
-// adds to team as active member. All in one transaction.
+// ClaimInviteToken atomically: validates token, marks used, activates a pending
+// device (2nd-device link flow), and adds the user to the team as an active
+// member. All in one transaction. Users are never globally pending (room-based
+// ownership), so only the device may need activating.
 func (s *Store) ClaimInviteToken(ctx context.Context, token, username, userID, deviceID string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -54,12 +56,9 @@ func (s *Store) ClaimInviteToken(ctx context.Context, token, username, userID, d
 		return fmt.Errorf("mark used: %w", err)
 	}
 
-	_, err = tx.ExecContext(ctx, s.rebind(
-		`UPDATE users SET status='active' WHERE id=? AND status='pending'`), userID)
-	if err != nil {
-		return fmt.Errorf("activate user: %w", err)
-	}
-
+	// A second device can be pending (unsigned cross-device add). Invite claim
+	// activates it so the new member can seal/receive vault keys. Users are
+	// never pending globally, so no users UPDATE is needed.
 	_, err = tx.ExecContext(ctx, s.rebind(
 		`UPDATE devices SET status='active' WHERE id=? AND status='pending'`), deviceID)
 	if err != nil {

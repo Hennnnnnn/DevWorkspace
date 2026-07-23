@@ -14,7 +14,7 @@ import (
 // RegisterResult is the outcome of registering a device.
 type RegisterResult struct {
 	Username    string
-	Status      string // pending | active
+	Status      string // active (new users are usable immediately)
 	Fingerprint string
 }
 
