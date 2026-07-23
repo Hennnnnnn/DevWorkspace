@@ -153,7 +153,6 @@ func NewRoot() *cobra.Command {
 	// wizard replaces them.
 	root.AddCommand(hidden(
 		newSetupCmd(),
-		newBootstrapAdminCmd(),
 	)...)
 	return root
 }

@@ -3,8 +3,6 @@ package actions
 import (
 	"fmt"
 
-	"github.com/Hennnnnnn/DevWorkspace/internal/client/api"
-	"github.com/Hennnnnnn/DevWorkspace/internal/client/config"
 	"github.com/Hennnnnnn/DevWorkspace/internal/client/keystore"
 	"github.com/Hennnnnnn/DevWorkspace/internal/crypto"
 )
@@ -44,25 +42,4 @@ func InitDevice(passphrase string) (*InitResult, error) {
 		return nil, err
 	}
 	return &InitResult{Mnemonic: mnemonic, Fingerprint: crypto.Fingerprint(kp.SignPub)}, nil
-}
-
-// BootstrapActiveUser activates the registered first user. Only succeeds when no
-// active users exist yet on the server (first user).
-func BootstrapActiveUser(passphrase string) error {
-	cfg, err := config.Load()
-	if err != nil {
-		return err
-	}
-	if cfg.Username == "" || cfg.ServerURL == "" {
-		return fmt.Errorf("register first — no username or server_url in config")
-	}
-	kp, err := keystore.Unlock(passphrase)
-	if err != nil {
-		return err
-	}
-	req := map[string]string{
-		"username":    cfg.Username,
-		"fingerprint": crypto.Fingerprint(kp.SignPub),
-	}
-	return api.PostUnsigned(cfg.ServerURL, "/bootstrap", req, nil)
 }

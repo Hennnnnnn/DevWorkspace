@@ -5,7 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Hennnnnnn/DevWorkspace/internal/client/actions"
 	"github.com/Hennnnnnn/DevWorkspace/internal/client/agent"
 	"github.com/Hennnnnnn/DevWorkspace/internal/client/config"
 	"github.com/Hennnnnnn/DevWorkspace/internal/client/keystore"
@@ -21,10 +20,9 @@ func newSetupCmd() *cobra.Command {
 Steps:
   1. Generate a device keypair (init)
   2. Register with the server (register)
-  3. Become admin (bootstrap-admin)
-  4. Create a team (create-team)
-  5. Create a vault (create-vault)
-  6. Push a secret (push)
+  3. Create a team (create-team)
+  4. Create a vault (create-vault)
+  5. Push a secret (push)
 
 Flags let you skip prompts if you already know the values.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -60,32 +58,10 @@ Flags let you skip prompts if you already know the values.`,
 				fmt.Printf("✓ Registered as %s\n", cfg.Username)
 			}
 
-			// --- step 3: bootstrap-active ---
-			isActive := false
-			if cfg.Username != "" {
-				cl, _, aErr := actions.AuthedClient()
-				if aErr == nil {
-					var who struct {
-						Status string `json:"status"`
-					}
-					cl.Get("/whoami", nil, &who)
-					isActive = who.Status == "active"
-				}
-			}
-			if !isActive {
-				fmt.Println("\n── Step 3: Activate account ──")
-				fmt.Println("Attempting first-user bootstrap (skipped if active user already exists)...")
-				if err := newBootstrapAdminCmd().RunE(cmd, args); err != nil {
-					fmt.Printf("(Bootstrap skipped — active user may exist: %v)\n", err)
-				}
-			} else {
-				fmt.Println("✓ Already active")
-			}
-
-			// --- step 4: unlock ---
+			// --- step 3: unlock ---
 			_, err := agent.Get()
 			if err != nil {
-				fmt.Println("\n── Step 4: Unlock your device key ──")
+				fmt.Println("\n── Step 3: Unlock your device key ──")
 				if err := newUnlockCmd().RunE(cmd, args); err != nil {
 					return fmt.Errorf("unlock: %w", err)
 				}
@@ -93,11 +69,11 @@ Flags let you skip prompts if you already know the values.`,
 				fmt.Println("✓ Device key unlocked")
 			}
 
-			// --- step 5: create-team ---
+			// --- step 4: create-team ---
 			if team == "" {
 				team, _ = promptLine("Team name (e.g. eng): ")
 			}
-			fmt.Println("\n── Step 5: Create a team ──")
+			fmt.Println("\n── Step 4: Create a team ──")
 			if err := newCreateTeamCmd().RunE(cmd, []string{team}); err != nil {
 				return fmt.Errorf("create-team: %w", err)
 			}
@@ -106,7 +82,7 @@ Flags let you skip prompts if you already know the values.`,
 			if vault == "" {
 				vault, _ = promptLine("Vault name (e.g. secrets): ")
 			}
-			fmt.Println("\n── Step 6: Create a vault ──")
+			fmt.Println("\n── Step 5: Create a vault ──")
 			vaultCmd := newCreateVaultCmd()
 			vaultCmd.Flags().Set("team", team)
 			if err := vaultCmd.RunE(cmd, []string{vault}); err != nil {
@@ -117,7 +93,7 @@ Flags let you skip prompts if you already know the values.`,
 			if file == "" {
 				file, _ = promptLine("File to push (e.g. .env): ")
 			}
-			fmt.Println("\n── Step 7: Push your first secret ──")
+			fmt.Println("\n── Step 6: Push your first secret ──")
 			pushCmd := newPushCmd()
 			pushCmd.Flags().Set("vault", vault)
 			if err := pushCmd.RunE(cmd, []string{file}); err != nil {

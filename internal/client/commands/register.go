@@ -37,9 +37,6 @@ func newRegisterCmd() *cobra.Command {
 				return err
 			}
 			fmt.Printf("registered as %q — status: %s\n", res.Username, res.Status)
-			if res.Status == "pending" {
-				fmt.Printf("Ask your team admin for an invite token, then run:\n  devsync teams join <token>\n")
-			}
 			return nil
 		},
 	}

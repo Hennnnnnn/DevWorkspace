@@ -3,7 +3,6 @@ package http
 import (
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	"github.com/Hennnnnnn/DevWorkspace/internal/protocol"
@@ -26,10 +25,6 @@ func (s *Server) Handler() http.Handler {
 
 	// Open (self-signed by the registering device, not yet trusted).
 	mux.HandleFunc("POST /register", rateLimit(s.handleRegister))
-
-	// Bootstrap — one-shot: activates the first user. Only works when
-	// zero active users exist. Safe to call right after /register.
-	mux.HandleFunc("POST /bootstrap", rateLimit(s.handleBootstrap))
 
 	// Authenticated (signature required; pending devices allowed for whoami).
 	mux.HandleFunc("GET /whoami", s.authed(s.handleWhoAmI))
@@ -81,65 +76,4 @@ func writeErr(w http.ResponseWriter, code int, msg string) {
 
 func base64Decode(s string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(s)
-}
-
-// handleBootstrap activates the first registered user. Only works when zero
-// active users exist (one-shot). The user must have already called /register.
-func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Username    string `json:"username"`
-		Fingerprint string `json:"fingerprint"`
-	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
-		writeErr(w, http.StatusBadRequest, "bad json")
-		return
-	}
-	if req.Username == "" || req.Fingerprint == "" {
-		writeErr(w, http.StatusBadRequest, "username and fingerprint required")
-		return
-	}
-	if len(req.Username) > 255 {
-		writeErr(w, http.StatusBadRequest, "username too long (max 255)")
-		return
-	}
-	if len(req.Fingerprint) > 200 {
-		writeErr(w, http.StatusBadRequest, "fingerprint too long")
-		return
-	}
-
-	ctx := r.Context()
-	n, err := s.store.CountActiveUsers(ctx)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "failed to check existing active users")
-		return
-	}
-	if n > 0 {
-		writeErr(w, http.StatusForbidden, "active user already exists")
-		return
-	}
-
-	dev, user, err := s.store.GetDeviceByFingerprint(ctx, req.Fingerprint)
-	if errors.Is(err, store.ErrNotFound) {
-		writeErr(w, http.StatusNotFound, "device not found — register first")
-		return
-	}
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "failed to look up device")
-		return
-	}
-	if user.Username != req.Username {
-		writeErr(w, http.StatusBadRequest, "fingerprint belongs to a different user")
-		return
-	}
-
-	if err := s.store.SetUserStatus(ctx, user.ID, "active"); err != nil {
-		writeErr(w, http.StatusInternalServerError, "failed to activate user")
-		return
-	}
-	if err := s.store.SetDeviceStatus(ctx, dev.ID, "active"); err != nil {
-		writeErr(w, http.StatusInternalServerError, "failed to activate device")
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]string{"status": "active", "username": user.Username})
 }

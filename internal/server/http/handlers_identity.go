@@ -41,18 +41,18 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	existing, err := s.store.GetUserByUsername(ctx, req.Username)
 
-	// New user -> new pending device.
+	// New user -> active (anyone can create teams/vaults).
 	if errors.Is(err, store.ErrNotFound) {
 		uid, did, err := s.store.CreateUserWithDevice(ctx,
-			store.User{Username: req.Username, Status: "pending"},
+			store.User{Username: req.Username, Status: "active"},
 			store.Device{Name: req.DeviceName, SignPubKey: req.SignPubKey, BoxPubKey: req.BoxPubKey,
-				Fingerprint: req.Fingerprint, Status: "pending"})
+				Fingerprint: req.Fingerprint, Status: "active"})
 		if err != nil {
 			writeErr(w, http.StatusConflict, "register failed: "+err.Error())
 			return
 		}
 		_ = s.store.Log(ctx, uid, did, "", "register", req.Username)
-		writeJSON(w, http.StatusOK, protocol.RegisterResponse{UserID: uid, DeviceID: did, Status: "pending"})
+		writeJSON(w, http.StatusOK, protocol.RegisterResponse{UserID: uid, DeviceID: did, Status: "active"})
 		return
 	}
 	if err != nil {

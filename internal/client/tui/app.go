@@ -33,9 +33,6 @@ func (m rootModel) Init() tea.Cmd {
 		return base.Init()
 	}
 	if actions.IsUnlocked() {
-		// Registered devices can still be pending admin approval — re-check
-		// on every launch instead of trusting the cached config, or a
-		// pending user who quits and restarts lands straight on the menu.
 		return checkStartupStatus
 	}
 	return pushView(newUnlockView())
@@ -111,10 +108,6 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case startupStatusMsg:
-		if msg.status != "" && msg.status != "active" {
-			m.stack = []tea.Model{newWaitingView(msg.username, msg.fingerprint)}
-			return m, m.stack[0].Init()
-		}
 		return m, nil
 
 	case replaceViewMsg:

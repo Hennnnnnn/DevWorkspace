@@ -43,13 +43,11 @@ func TestFullLifecycle(t *testing.T) {
 	ts := httptest.NewServer(srvhttp.New(st).Handler())
 	defer ts.Close()
 
-	// --- alice registers + bootstraps active (no admin) ---
+	// --- alice registers (auto-active) ---
 	alice := newTestDevice(t)
 	registerDevice(t, ts.URL, "alice", alice)
 	aliceUser, _ := st.GetUserByUsername(ctx, "alice")
-	_ = st.SetUserStatus(ctx, aliceUser.ID, "active")
 	devs, _ := st.ListDevices(ctx, aliceUser.ID)
-	_ = st.SetDeviceStatus(ctx, devs[0].ID, "active")
 
 	// whoami — status active, no team roles yet.
 	var who protocol.WhoAmIResponse
@@ -152,18 +150,6 @@ func TestFullLifecycle(t *testing.T) {
 	})
 	if code != http.StatusForbidden {
 		t.Fatalf("expected 403 for non-admin grant, got %d", code)
-	}
-
-	// --- bootstrap fails when active users exist ---
-	bootstrapReq := map[string]string{"username": "budi", "fingerprint": budi.fp}
-	body, _ := json.Marshal(bootstrapReq)
-	resp, err := http.Post(ts.URL+"/bootstrap", "application/json", bytes.NewReader(body))
-	if err != nil {
-		t.Fatalf("bootstrap request failed: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("expected 403 on second bootstrap, got %d", resp.StatusCode)
 	}
 
 	// --- anti-replay: old timestamp rejected ---
@@ -357,10 +343,6 @@ func TestAuthMiddleware(t *testing.T) {
 
 	alice := newTestDevice(t)
 	registerDevice(t, ts.URL, "alice", alice)
-	aliceUser, _ := st.GetUserByUsername(ctx, "alice")
-	_ = st.SetUserStatus(ctx, aliceUser.ID, "active")
-	aliceDevs, _ := st.ListDevices(ctx, aliceUser.ID)
-	_ = st.SetDeviceStatus(ctx, aliceDevs[0].ID, "active")
 
 	// Test 1: missing auth headers
 	resp, _ := http.Get(ts.URL + "/whoami")

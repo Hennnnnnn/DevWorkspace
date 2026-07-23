@@ -11,12 +11,11 @@ var helpTopics = map[string]string{
 
   1. devsync init                  generate keypair
   2. devsync register --username x register with server
-  3. devsync bootstrap-admin       activate account (first user only)
-  4. devsync unlock                unlock device key
-  5. devsync create-team <name>    create a team
-  6. devsync create-vault <name>   create a vault
+  3. devsync unlock                unlock device key
+  4. devsync create-team <name>    create a team
+  5. devsync create-vault <name>   create a vault
      --team <team>
-  7. devsync push <file>           encrypt + upload
+  6. devsync push <file>           encrypt + upload
      --vault <vault>
 
 Run 'devsync setup' for an interactive walkthrough.`,

@@ -130,17 +130,3 @@ func (s *Store) SetDeviceStatus(ctx context.Context, deviceID, status string) er
 	_, err := s.db.ExecContext(ctx, s.rebind(q), status, deviceID)
 	return err
 }
-
-// CountActiveUsers returns the number of active users (bootstrap gate).
-func (s *Store) CountActiveUsers(ctx context.Context) (int, error) {
-	var n int
-	err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM users WHERE status='active'`).Scan(&n)
-	return n, err
-}
-
-// CountUsers returns total user count (bootstrap admin race check).
-func (s *Store) CountUsers(ctx context.Context) (int, error) {
-	var n int
-	err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM users`).Scan(&n)
-	return n, err
-}
