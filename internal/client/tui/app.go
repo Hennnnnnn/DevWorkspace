@@ -4,10 +4,6 @@ package tui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
-
-	"github.com/Hennnnnnn/DevWorkspace/internal/client/actions"
-	"github.com/Hennnnnnn/DevWorkspace/internal/client/config"
-	"github.com/Hennnnnnn/DevWorkspace/internal/client/keystore"
 )
 
 // rootModel drives a lazygit/k9s-style drill-down stack: top menu -> list ->
@@ -19,22 +15,12 @@ type rootModel struct {
 }
 
 func newRootModel() rootModel {
-	// First run (no keystore or never registered) → onboarding wizard.
-	cfg, _ := config.Load()
-	if !keystore.Exists() || cfg == nil || cfg.Username == "" {
-		return rootModel{stack: []tea.Model{newWizardView()}}
-	}
-	return rootModel{stack: []tea.Model{newMenuModel(0, 0)}}
+	// Account-centric startup: always show the auth screen (Login / Register /
+	// Recover). Device management lives post-auth, never at startup.
+	return rootModel{stack: []tea.Model{newAuthView(0, 0)}}
 }
 
 func (m rootModel) Init() tea.Cmd {
-	base := m.stack[0]
-	if _, onboarding := base.(wizardModel); onboarding {
-		return base.Init()
-	}
-	if !actions.IsUnlocked() {
-		return pushView(newUnlockView())
-	}
 	return nil
 }
 

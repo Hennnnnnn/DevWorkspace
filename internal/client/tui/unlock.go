@@ -21,9 +21,10 @@ func doUnlock(passphrase string) tea.Cmd {
 }
 
 type unlockModel struct {
-	input   textinput.Model
-	err     error
-	working bool
+	input     textinput.Model
+	err       error
+	working   bool
+	onSuccess tea.Model // ponytail: nil = pop (mid-session), non-nil = replaceView (login flow)
 }
 
 func newUnlockView() tea.Model {
@@ -32,6 +33,14 @@ func newUnlockView() tea.Model {
 	ti.EchoMode = textinput.EchoPassword
 	ti.Focus()
 	return unlockModel{input: ti}
+}
+
+// newLoginUnlockView is the auth-screen Login path: on success, replace the
+// stack with the dashboard rather than popping back to the auth screen.
+func newLoginUnlockView() tea.Model {
+	m := newUnlockView().(unlockModel)
+	m.onSuccess = newMenuModel(0, 0)
+	return m
 }
 
 func (m unlockModel) Init() tea.Cmd { return textinput.Blink }
@@ -44,6 +53,9 @@ func (m unlockModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.err
 			m.input.Reset()
 			return m, nil
+		}
+		if m.onSuccess != nil {
+			return m, func() tea.Msg { return replaceViewMsg{model: m.onSuccess} }
 		}
 		return m, popView // unlocked — back to the view that needed it
 

@@ -400,3 +400,86 @@ func TestAuthMiddleware(t *testing.T) {
 }
 
 var _ = ed25519.PublicKeySize
+
+// TestRecoverReactivatesDevice exercises the recovery branch: a user registers,
+// loses their device (revoked), then re-registers with the same fingerprint
+// (recovery phrase → same keypair). The server must reactivate the existing
+// device row with status active and the same DeviceID — no new row, no manual
+// approval. Recovery phrase IS the reset token.
+func TestRecoverReactivatesDevice(t *testing.T) {
+	driver, dsn := "sqlite", ""
+	if pg := os.Getenv("DEVSYNC_TEST_DATABASE_URL"); pg != "" {
+		driver, dsn = "pgx", pg
+	} else {
+		path := filepath.Join(t.TempDir(), "test.db")
+		dsn = "file:" + path + "?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
+	}
+	ctx := context.Background()
+	if err := db.Migrate(ctx, driver, dsn); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	st, err := store.New(ctx, driver, dsn)
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	defer st.Close()
+
+	ts := httptest.NewServer(srvhttp.New(st).Handler())
+	defer ts.Close()
+
+	// Step 1: alice registers from a deterministic seed (so we can "recover" it).
+	seed, _ := crypto.GenerateRecoverySeed()
+	kp, _ := crypto.DeriveKeyPairFromSeed(seed)
+	fp := crypto.Fingerprint(kp.SignPub)
+	alice := &testDevice{kp: kp, fp: fp}
+	registerDevice(t, ts.URL, "alice", alice)
+
+	before, _, _ := st.GetDeviceByFingerprint(ctx, fp)
+	if before.Status != "active" {
+		t.Fatalf("expected active after first register, got %s", before.Status)
+	}
+
+	// Step 2: alice revokes her device (simulates "lost device").
+	if err := st.SetDeviceStatus(ctx, before.ID, "revoked"); err != nil {
+		t.Fatalf("revoke: %v", err)
+	}
+
+	// Step 3: alice re-registers with the SAME fingerprint (recovery).
+	var resp protocol.RegisterResponse
+	body, _ := json.Marshal(protocol.RegisterRequest{
+		Username: "alice", DeviceName: "recovered", SignPubKey: kp.SignPub,
+		BoxPubKey: kp.BoxPub[:], Fingerprint: fp,
+	})
+	r, err := http.Post(ts.URL+"/register", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Body.Close()
+	if r.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(r.Body)
+		t.Fatalf("recover register failed %d: %s", r.StatusCode, b)
+	}
+	json.NewDecoder(r.Body).Decode(&resp)
+	if resp.Status != "active" {
+		t.Fatalf("expected active after recovery, got %s", resp.Status)
+	}
+	if resp.DeviceID != before.ID {
+		t.Fatalf("expected same DeviceID after recovery, got %s (want %s)", resp.DeviceID, before.ID)
+	}
+
+	// Step 4: no duplicate device row — reactivation, not insert.
+	after, _, _ := st.GetDeviceByFingerprint(ctx, fp)
+	if after.ID != before.ID {
+		t.Fatalf("expected reactivated row, got new id %s vs %s", after.ID, before.ID)
+	}
+	if after.Status != "active" {
+		t.Fatalf("expected reactivated status active, got %s", after.Status)
+	}
+
+	// Step 5: signature verification still works — alice can call /whoami.
+	var who protocol.WhoAmIResponse
+	alice.get(t, ts.URL, "alice", "/whoami", nil, &who)
+	if who.Status != "active" || who.Device.Status != "active" {
+		t.Fatalf("whoami after recovery: %+v", who)
+	}
+}

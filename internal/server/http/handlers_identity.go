@@ -61,6 +61,25 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Recovery: the 24-word mnemonic regenerates the same keypair → same
+	// fingerprint. Reactivate the existing device row instead of inserting
+	// a duplicate (UNIQUE constraint on fingerprint). The recovery phrase
+	// is the account's reset token, so the device becomes active with no
+	// manual approval and no link signature required.
+	if d, _, ferr := s.store.GetDeviceByFingerprint(ctx, req.Fingerprint); ferr == nil {
+		if d.UserID != existing.ID {
+			writeErr(w, http.StatusForbidden, "fingerprint belongs to another user")
+			return
+		}
+		if err := s.store.SetDeviceStatus(ctx, d.ID, "active"); err != nil {
+			writeErr(w, http.StatusInternalServerError, "reactivate device")
+			return
+		}
+		_ = s.store.Log(ctx, existing.ID, d.ID, "", "device_recover", req.Fingerprint)
+		writeJSON(w, http.StatusOK, protocol.RegisterResponse{UserID: existing.ID, DeviceID: d.ID, Status: "active"})
+		return
+	}
+
 	// Existing user adding a device. Requires a valid link signature from one of
 	// their active devices over the new fingerprint.
 	status := "pending"
