@@ -3,6 +3,8 @@
 package tui
 
 import (
+	"fmt"
+
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/Hennnnnnn/DevWorkspace/internal/client/actions"
@@ -16,6 +18,7 @@ type rootModel struct {
 	stack  []tea.Model
 	width  int
 	height int
+	banner string
 }
 
 func newRootModel() rootModel {
@@ -108,6 +111,9 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case startupStatusMsg:
+		if msg.status != "" && msg.status != "active" {
+			m.banner = warningStyle.Render(fmt.Sprintf("Device %s is %s — ask admin to activate it", msg.fingerprint, msg.status))
+		}
 		return m, nil
 
 	case replaceViewMsg:
@@ -129,7 +135,11 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m rootModel) View() string {
-	return RenderHeader(m.width) + m.top().View()
+	banner := ""
+	if m.banner != "" {
+		banner = "\n" + m.banner + "\n"
+	}
+	return RenderHeader(m.width) + banner + m.top().View()
 }
 
 // Run starts the TUI.

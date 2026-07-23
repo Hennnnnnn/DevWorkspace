@@ -81,7 +81,11 @@ func (c *Client) doSigned(method, path string, query url.Values, body any, out a
 	if resp.StatusCode >= 300 {
 		var e protocol.ErrorResponse
 		if json.Unmarshal(respBody, &e) == nil && e.Error != "" {
-			return fmt.Errorf("server: %s (%d)", e.Error, resp.StatusCode)
+			msg := e.Error
+			if msg == "device not active" {
+				msg += " — your device is pending. Ask admin to run: devsync-server create-admin " + c.username + " " + c.fingerprint
+			}
+			return fmt.Errorf("server: %s (%d)", msg, resp.StatusCode)
 		}
 		body := string(respBody)
 		if len(body) > 200 {
