@@ -14,8 +14,8 @@ import (
 func newBootstrapAdminCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "bootstrap-admin",
-		Short: "Promote yourself to admin (first-user bootstrap, no admin needed)",
-		Long:  "Call this after register. Promotes your pending user to admin.\nOnly works when no admin exists yet on the server.",
+		Short: "Activate your account (first-user bootstrap, no admin needed)",
+		Long:  "Call this after register. Activates your pending user.\nOnly works when no active users exist yet on the server.",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			cfg, err := config.Load()
 			if err != nil {
@@ -40,11 +40,11 @@ func newBootstrapAdminCmd() *cobra.Command {
 				"fingerprint": fp,
 			}
 
-			fmt.Printf("bootstrapping admin %s on %s ...\n", cfg.Username, cfg.ServerURL)
-			if err := api.PostUnsigned(cfg.ServerURL, "/admin/bootstrap", req, nil); err != nil {
+			fmt.Printf("activating %s on %s ...\n", cfg.Username, cfg.ServerURL)
+			if err := api.PostUnsigned(cfg.ServerURL, "/bootstrap", req, nil); err != nil {
 				return err
 			}
-			fmt.Printf("admin bootstrap successful — you are now admin\n")
+			fmt.Printf("account activated — you can now create a team\n")
 			return nil
 		},
 	}

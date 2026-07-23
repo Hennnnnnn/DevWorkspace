@@ -75,7 +75,7 @@ func (m menuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			for i, it := range items {
 				mi, ok := it.(menuItem)
 				if ok && mi.title == "Teams" {
-					mi.desc = fmt.Sprintf("teams, members — %s", warningStyle.Render(fmt.Sprintf("%d pending approval", msg.count)))
+					mi.desc = fmt.Sprintf("teams, members — %s", warningStyle.Render(fmt.Sprintf("%d pending invites", msg.count)))
 					items[i] = mi
 				}
 			}

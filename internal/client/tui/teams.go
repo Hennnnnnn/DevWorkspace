@@ -32,7 +32,7 @@ func (i teamItem) Description() string {
 		return "[joined]" + creator
 	}
 	if i.pending {
-		return "[pending approval]" + creator
+		return "[pending invite]" + creator
 	}
 	return "[not joined]" + creator
 }
@@ -261,7 +261,7 @@ func doJoinTeam(name string) tea.Cmd {
 		if err := actions.Join(name); err != nil {
 			return actionDoneMsg{err: err}
 		}
-		return actionDoneMsg{ok: fmt.Sprintf("joined team %q (pending approval)", name)}
+		return actionDoneMsg{ok: fmt.Sprintf("joined team %q", name)}
 	}
 }
 
@@ -351,7 +351,11 @@ func (i memberItem) Title() string {
 	if i.pending {
 		return i.m.Username + " " + warningStyle.Render("(pending)")
 	}
-	return i.m.Username
+	role := ""
+	if i.m.Role == "admin" {
+		role = " " + successStyle.Render("(admin)")
+	}
+	return i.m.Username + role
 }
 
 func (i memberItem) Description() string {
@@ -393,7 +397,6 @@ func newMembersView(team string, width, height int) tea.Model {
 	l.DisableQuitKeybindings()
 	l.AdditionalShortHelpKeys = func() []key.Binding {
 		return []key.Binding{
-			helpKey("a", "approve selected"),
 			helpKey("p", "toggle pending"),
 			helpKey("U", "unlock"),
 			helpKey("r", "refresh"),
@@ -465,12 +468,6 @@ func (m membersModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 		switch msg.String() {
-		case "a", "enter":
-			it, ok := m.list.SelectedItem().(memberItem)
-			if !ok || !it.pending {
-				return m, nil
-			}
-			return m, pushView(newApproveFlowView(it.m, m.team))
 		case "p":
 			m.pendingOnly = !m.pendingOnly
 			m.filterAndSetItems()
@@ -507,170 +504,10 @@ func (m membersModel) View() string {
 		}
 	}
 	if !actions.IsUnlocked() {
-		body += "\n  " + warningStyle.Render("locked") + " — press U to unlock (needed for approve)\n"
+		body += "\n  " + warningStyle.Render("locked") + " — press U to unlock\n"
 	}
 	if m.status != "" {
 		body += "\n  " + m.status + "\n"
 	}
 	return body
-}
-
-// --- approve flow: confirm identity → pick vaults → approve+grant in one go ---
-
-type approveResultMsg struct {
-	ok  string
-	err error
-}
-
-func doApproveGrant(user, fingerprint string, vaults []string) tea.Cmd {
-	return func() tea.Msg {
-		res, err := actions.Approve(user, fingerprint, vaults)
-		if err != nil {
-			return approveResultMsg{err: err}
-		}
-		note := ""
-		if res.ShareNote != "" {
-			note = " (" + res.ShareNote + ")"
-		} else if res.VaultsShared > 0 {
-			note = fmt.Sprintf(", granted %d vault(s)", res.VaultsShared)
-		}
-		return approveResultMsg{ok: fmt.Sprintf("approved %s%s", user, note)}
-	}
-}
-
-type approveVaultsLoadedMsg struct {
-	vaults []protocol.Vault
-	err    error
-}
-
-type approveFlowStep int
-
-const (
-	approveConfirm approveFlowStep = iota // visual check: username + fingerprint
-	approvePick                           // multi-select vaults to grant
-	approveBusy
-)
-
-type approveFlowModel struct {
-	member   protocol.Member
-	team     string
-	step     approveFlowStep
-	vaults   []protocol.Vault
-	selected map[int]bool
-	cursor   int
-	err      error
-}
-
-func newApproveFlowView(member protocol.Member, team string) tea.Model {
-	return approveFlowModel{member: member, team: team, selected: map[int]bool{}}
-}
-
-func (m approveFlowModel) Init() tea.Cmd {
-	return func() tea.Msg {
-		vs, err := actions.ListVaults()
-		return approveVaultsLoadedMsg{vaults: vs, err: err}
-	}
-}
-
-func (m approveFlowModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case approveVaultsLoadedMsg:
-		if msg.err == nil {
-			// Default: grant every team vault (changeable in the picker).
-			m.vaults = msg.vaults
-			for i := range m.vaults {
-				m.selected[i] = true
-			}
-		}
-		return m, nil
-
-	case approveResultMsg:
-		if msg.err != nil {
-			m.step = approveConfirm
-			m.err = msg.err
-			return m, nil
-		}
-		return m, tea.Sequence(
-			func() tea.Msg { return popMsg{} },
-			func() tea.Msg { return actionDoneMsg{ok: msg.ok} },
-			loadMembers(m.team),
-		)
-
-	case tea.KeyMsg:
-		switch m.step {
-		case approveConfirm:
-			if msg.String() == "y" || msg.String() == "enter" {
-				m.err = nil
-				if len(m.vaults) == 0 {
-					m.step = approveBusy
-					return m, doApproveGrant(m.member.Username, m.member.Fingerprint, nil)
-				}
-				m.step = approvePick
-			}
-			return m, nil
-
-		case approvePick:
-			switch msg.String() {
-			case "up", "k":
-				if m.cursor > 0 {
-					m.cursor--
-				}
-			case "down", "j":
-				if m.cursor < len(m.vaults)-1 {
-					m.cursor++
-				}
-			case " ":
-				m.selected[m.cursor] = !m.selected[m.cursor]
-			case "enter":
-				var names []string
-				for i, v := range m.vaults {
-					if m.selected[i] {
-						names = append(names, v.Name)
-					}
-				}
-				if names == nil {
-					names = []string{} // approve without granting anything
-				}
-				m.step = approveBusy
-				return m, doApproveGrant(m.member.Username, m.member.Fingerprint, names)
-			}
-			return m, nil
-		}
-	}
-	return m, nil
-}
-
-func (m approveFlowModel) View() string {
-	switch m.step {
-	case approveConfirm:
-		s := "\n  " + infoStyle.Render("Approve pending user") + "\n\n"
-		s += "  username:    " + selectionStyle.Render(m.member.Username) + "\n"
-		s += "  fingerprint: " + selectionStyle.Render(m.member.Fingerprint) + "\n\n"
-		s += "  " + warningStyle.Render("Verify this fingerprint with the user out-of-band") + "\n"
-		s += "  (call, chat, in person) before approving.\n"
-		if m.err != nil {
-			s += "\n  " + dangerStyle.Render("error: "+m.err.Error()) + "\n"
-		}
-		s += "\n  y/enter: it matches — continue   esc: cancel\n"
-		return s
-
-	case approvePick:
-		s := "\n  " + infoStyle.Render("Grant vault access to "+m.member.Username) + "\n\n"
-		for i, v := range m.vaults {
-			cursor := "  "
-			if i == m.cursor {
-				cursor = selectionStyle.Render("> ")
-			}
-			check := "[ ]"
-			if m.selected[i] {
-				check = successStyle.Render("[x]")
-			}
-			s += "  " + cursor + check + " " + v.Name + " (" + v.Team + ")\n"
-		}
-		s += "\n  space: toggle   enter: approve + grant   esc: cancel\n"
-		return s
-
-	default:
-		return "\n  approving…\n"
-	}
 }

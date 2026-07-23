@@ -67,7 +67,7 @@ func newDeviceAddCmd() *cobra.Command {
 			// using data printed here. We print a signature the user copies over.
 			return fmt.Errorf("device linking: run `devsync register` on the NEW device; " +
 				"it will submit a link signature. Full interactive linking lands with the agent socket. " +
-				"For now, an admin can `devsync approve` the new device")
+				"For now, ask your team admin for an invite token to activate new devices")
 		},
 	}
 	cmd.Flags().StringVar(&fingerprint, "fingerprint", "", "new device fingerprint")

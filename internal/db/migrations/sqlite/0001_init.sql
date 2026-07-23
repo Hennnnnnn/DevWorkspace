@@ -9,7 +9,6 @@ CREATE TABLE users (
     username    TEXT NOT NULL UNIQUE,
     status      TEXT NOT NULL DEFAULT 'pending'
                     CHECK (status IN ('pending', 'active', 'disabled')),
-    is_admin    INTEGER NOT NULL DEFAULT 0,
     created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -38,6 +37,8 @@ CREATE TABLE team_members (
     user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     status      TEXT NOT NULL DEFAULT 'pending'
                     CHECK (status IN ('pending', 'active')),
+    role        TEXT NOT NULL DEFAULT 'member'
+                    CHECK (role IN ('admin', 'member')),
     joined_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (team_id, user_id)
 );

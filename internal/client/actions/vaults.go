@@ -46,14 +46,14 @@ func CreateVault(name, team string) (*protocol.Vault, error) {
 	}
 	var v protocol.Vault
 	req := protocol.CreateVaultRequest{Team: team, Name: name, Shares: shares}
-	if err := cl.Post("/admin/create-vault", req, &v); err != nil {
+	if err := cl.Post("/teams/vaults/create", req, &v); err != nil {
 		return nil, err
 	}
 	return &v, nil
 }
 
-// Grant gives a user access to a vault, re-sealing the key to their devices (admin).
-func Grant(user, vault string) error {
+// Grant gives a user access to a vault, re-sealing the key to their devices (team admin).
+func Grant(user, vault, team string) error {
 	cl, _, err := AuthedClient()
 	if err != nil {
 		return err
@@ -81,8 +81,8 @@ func Grant(user, vault string) error {
 	if err != nil {
 		return err
 	}
-	req := protocol.GrantRequest{Username: user, Vault: vault, Shares: shares}
-	return cl.Post("/admin/grant", req, nil)
+	req := protocol.GrantRequest{Username: user, Vault: vault, Team: team, Shares: shares}
+	return cl.Post("/teams/vaults/grant", req, nil)
 }
 
 // RevokeResult is the outcome of rotating a vault's key after revoking a user.
@@ -91,8 +91,8 @@ type RevokeResult struct {
 	FilesReEncrypted int
 }
 
-// Revoke revokes a user's vault access and rotates the vault key (admin).
-func Revoke(user, vault string) (*RevokeResult, error) {
+// Revoke revokes a user's vault access and rotates the vault key (team admin).
+func Revoke(user, vault, team string) (*RevokeResult, error) {
 	cl, _, err := AuthedClient()
 	if err != nil {
 		return nil, err
@@ -155,9 +155,9 @@ func Revoke(user, vault string) (*RevokeResult, error) {
 	}
 
 	req := protocol.RevokeRequest{
-		Username: user, Vault: vault,
+		Username: user, Vault: vault, Team: team,
 		NewKeyVersion: newVer, Shares: shares, Files: reFiles}
-	if err := cl.Post("/admin/revoke", req, nil); err != nil {
+	if err := cl.Post("/teams/vaults/revoke", req, nil); err != nil {
 		return nil, err
 	}
 	return &RevokeResult{NewKeyVersion: newVer, FilesReEncrypted: len(reFiles)}, nil

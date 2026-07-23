@@ -7,7 +7,6 @@ import (
 
 	"github.com/Hennnnnnn/DevWorkspace/internal/client/actions"
 	"github.com/Hennnnnnn/DevWorkspace/internal/client/agent"
-	"github.com/Hennnnnnn/DevWorkspace/internal/client/api"
 	"github.com/Hennnnnnn/DevWorkspace/internal/client/config"
 	"github.com/Hennnnnnn/DevWorkspace/internal/client/keystore"
 )
@@ -61,28 +60,26 @@ Flags let you skip prompts if you already know the values.`,
 				fmt.Printf("✓ Registered as %s\n", cfg.Username)
 			}
 
-			// --- step 3: bootstrap-admin ---
-			isAdmin := false
-			var aErr error
+			// --- step 3: bootstrap-active ---
+			isActive := false
 			if cfg.Username != "" {
-				var cl *api.Client
-				cl, _, aErr = actions.AuthedClient()
+				cl, _, aErr := actions.AuthedClient()
 				if aErr == nil {
 					var who struct {
-						IsAdmin bool `json:"is_admin"`
+						Status string `json:"status"`
 					}
 					cl.Get("/whoami", nil, &who)
-					isAdmin = who.IsAdmin
+					isActive = who.Status == "active"
 				}
 			}
-		if !isAdmin {
-			fmt.Println("\n── Step 3: Become admin ──")
-			fmt.Println("Attempting first-user bootstrap (skipped if admin already exists)...")
-			if err := newBootstrapAdminCmd().RunE(cmd, args); err != nil {
-				fmt.Printf("(Bootstrap skipped — admin may already exist: %v)\n", err)
-			}
-		} else {
-				fmt.Println("✓ Already admin")
+			if !isActive {
+				fmt.Println("\n── Step 3: Activate account ──")
+				fmt.Println("Attempting first-user bootstrap (skipped if active user already exists)...")
+				if err := newBootstrapAdminCmd().RunE(cmd, args); err != nil {
+					fmt.Printf("(Bootstrap skipped — active user may exist: %v)\n", err)
+				}
+			} else {
+				fmt.Println("✓ Already active")
 			}
 
 			// --- step 4: unlock ---

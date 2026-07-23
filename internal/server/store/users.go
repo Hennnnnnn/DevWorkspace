@@ -11,7 +11,7 @@ import (
 var ErrNotFound = errors.New("not found")
 
 // CreateUserWithDevice inserts a new user and their first device in one tx.
-// Used by register (status pending) and create-admin (active + admin).
+// Used by register (status pending).
 func (s *Store) CreateUserWithDevice(ctx context.Context, u User, d Device) (userID, deviceID string, err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -21,8 +21,8 @@ func (s *Store) CreateUserWithDevice(ctx context.Context, u User, d Device) (use
 
 	userID = newID()
 	if _, err = tx.ExecContext(ctx, s.rebind(
-		`INSERT INTO users (id, username, status, is_admin) VALUES (?,?,?,?)`),
-		userID, u.Username, u.Status, u.IsAdmin); err != nil {
+		`INSERT INTO users (id, username, status) VALUES (?,?,?)`),
+		userID, u.Username, u.Status); err != nil {
 		return "", "", fmt.Errorf("insert user: %w", err)
 	}
 	deviceID = newID()
@@ -51,8 +51,8 @@ func (s *Store) AddDevice(ctx context.Context, d Device) (string, error) {
 func (s *Store) GetUserByUsername(ctx context.Context, username string) (*User, error) {
 	var u User
 	err := s.db.QueryRowContext(ctx, s.rebind(
-		`SELECT id, username, status, is_admin FROM users WHERE username=?`), username).
-		Scan(&u.ID, &u.Username, &u.Status, &u.IsAdmin)
+		`SELECT id, username, status FROM users WHERE username=?`), username).
+		Scan(&u.ID, &u.Username, &u.Status)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -73,11 +73,11 @@ func (s *Store) GetDeviceByFingerprint(ctx context.Context, fp string) (*Device,
 	var u User
 	err := s.db.QueryRowContext(ctx, s.rebind(
 		`SELECT d.id, d.user_id, d.name, d.public_key, d.box_public_key, d.fingerprint, d.status,
-		        u.id, u.username, u.status, u.is_admin
+		        u.id, u.username, u.status
 		 FROM devices d JOIN users u ON u.id = d.user_id
 		 WHERE d.fingerprint=?`), fp).
 		Scan(&d.ID, &d.UserID, &d.Name, &d.SignPubKey, &d.BoxPubKey, &d.Fingerprint, &d.Status,
-			&u.ID, &u.Username, &u.Status, &u.IsAdmin)
+			&u.ID, &u.Username, &u.Status)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil, ErrNotFound
 	}
@@ -131,22 +131,16 @@ func (s *Store) SetDeviceStatus(ctx context.Context, deviceID, status string) er
 	return err
 }
 
+// CountActiveUsers returns the number of active users (bootstrap gate).
+func (s *Store) CountActiveUsers(ctx context.Context) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM users WHERE status='active'`).Scan(&n)
+	return n, err
+}
+
 // CountUsers returns total user count (bootstrap admin race check).
 func (s *Store) CountUsers(ctx context.Context) (int, error) {
 	var n int
 	err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM users`).Scan(&n)
 	return n, err
-}
-
-// CountAdmins returns the number of admin users.
-func (s *Store) CountAdmins(ctx context.Context) (int, error) {
-	var n int
-	err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM users WHERE is_admin=TRUE`).Scan(&n)
-	return n, err
-}
-
-// SetUserAdmin sets a user's admin flag.
-func (s *Store) SetUserAdmin(ctx context.Context, userID string, isAdmin bool) error {
-	_, err := s.db.ExecContext(ctx, s.rebind(`UPDATE users SET is_admin=? WHERE id=?`), isAdmin, userID)
-	return err
 }

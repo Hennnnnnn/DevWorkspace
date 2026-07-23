@@ -67,9 +67,9 @@ func (s *Store) ClaimInviteToken(ctx context.Context, token, username, userID, d
 	}
 
 	_, err = tx.ExecContext(ctx, s.rebind(
-		`INSERT INTO team_members (team_id, user_id, status) VALUES (?,?,?)
-		 ON CONFLICT (team_id, user_id) DO UPDATE SET status=EXCLUDED.status`),
-		t.TeamID, userID, "active")
+		`INSERT INTO team_members (team_id, user_id, status, role) VALUES (?,?,?,?)
+		 ON CONFLICT (team_id, user_id) DO UPDATE SET status=EXCLUDED.status, role=EXCLUDED.role`),
+		t.TeamID, userID, "active", "member")
 	if err != nil {
 		return fmt.Errorf("add team member: %w", err)
 	}

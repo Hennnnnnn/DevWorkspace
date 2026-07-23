@@ -27,18 +27,17 @@ func (s *Server) Handler() http.Handler {
 	// Open (self-signed by the registering device, not yet trusted).
 	mux.HandleFunc("POST /register", rateLimit(s.handleRegister))
 
-	// Bootstrap — one-shot: promotes the first user to admin. Only works when
-	// zero admins exist. Safe to call right after /register.
-	mux.HandleFunc("POST /admin/bootstrap", rateLimit(s.handleBootstrap))
+	// Bootstrap — one-shot: activates the first user. Only works when
+	// zero active users exist. Safe to call right after /register.
+	mux.HandleFunc("POST /bootstrap", rateLimit(s.handleBootstrap))
 
 	// Authenticated (signature required; pending devices allowed for whoami).
 	mux.HandleFunc("GET /whoami", s.authed(s.handleWhoAmI))
 
 	// Active user required.
 	mux.HandleFunc("GET /teams", s.activeAuthed(s.handleTeams))
-	mux.HandleFunc("POST /teams/join", s.activeAuthed(s.handleJoin))
 	mux.HandleFunc("POST /teams/claim", s.authed(s.handleClaimInvite))
-	mux.HandleFunc("GET /members", s.activeAuthed(s.handleMembers))
+	mux.HandleFunc("GET /teams/members", s.activeAuthed(s.handleMembers))
 	mux.HandleFunc("GET /vaults", s.activeAuthed(s.handleVaults))
 	mux.HandleFunc("GET /vaults/keyshares", s.activeAuthed(s.handleKeyShares))
 	mux.HandleFunc("POST /files/push", s.activeAuthed(s.handlePush))
@@ -50,15 +49,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /devices/link", s.activeAuthed(s.handleLinkDevice))
 	mux.HandleFunc("GET /audit", s.activeAuthed(s.handleAudit))
 
-	// Admin only.
-	mux.HandleFunc("POST /admin/create-team", s.adminAuthed(s.handleCreateTeam))
-	mux.HandleFunc("POST /admin/delete-team", s.adminAuthed(s.handleDeleteTeam))
-	mux.HandleFunc("POST /admin/approve", s.adminAuthed(s.handleApprove))
-	mux.HandleFunc("POST /admin/create-vault", s.adminAuthed(s.handleCreateVault))
-	mux.HandleFunc("POST /admin/grant", s.adminAuthed(s.handleGrant))
-	mux.HandleFunc("POST /admin/revoke", s.adminAuthed(s.handleRevoke))
-	mux.HandleFunc("POST /admin/invite", s.adminAuthed(s.handleInvite))
-	mux.HandleFunc("POST /admin/set-admin", s.adminAuthed(s.handleSetAdmin))
+	// Team admin only.
+	mux.HandleFunc("POST /teams/create", s.activeAuthed(s.handleCreateTeam))
+	mux.HandleFunc("POST /teams/delete", s.teamAdminAuthed(s.handleDeleteTeam))
+	mux.HandleFunc("POST /teams/vaults/create", s.teamAdminAuthed(s.handleCreateVault))
+	mux.HandleFunc("POST /teams/vaults/grant", s.teamAdminAuthed(s.handleGrant))
+	mux.HandleFunc("POST /teams/vaults/revoke", s.teamAdminAuthed(s.handleRevoke))
+	mux.HandleFunc("POST /teams/invite", s.teamAdminAuthed(s.handleInvite))
+	mux.HandleFunc("POST /teams/set-admin", s.teamAdminAuthed(s.handleSetAdmin))
 
 	return mux
 }
@@ -85,8 +83,8 @@ func base64Decode(s string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(s)
 }
 
-// handleBootstrap promotes a registered user to admin. Only works when zero
-// admins exist (one-shot). The user must have already called /register.
+// handleBootstrap activates the first registered user. Only works when zero
+// active users exist (one-shot). The user must have already called /register.
 func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Username    string `json:"username"`
@@ -110,13 +108,13 @@ func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	n, err := s.store.CountAdmins(ctx)
+	n, err := s.store.CountActiveUsers(ctx)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "failed to check existing admins")
+		writeErr(w, http.StatusInternalServerError, "failed to check existing active users")
 		return
 	}
 	if n > 0 {
-		writeErr(w, http.StatusForbidden, "admin already exists")
+		writeErr(w, http.StatusForbidden, "active user already exists")
 		return
 	}
 
@@ -142,10 +140,6 @@ func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "failed to activate device")
 		return
 	}
-	if err := s.store.SetUserAdmin(ctx, user.ID, true); err != nil {
-		writeErr(w, http.StatusInternalServerError, "failed to promote to admin")
-		return
-	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"status": "admin", "username": user.Username})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "active", "username": user.Username})
 }

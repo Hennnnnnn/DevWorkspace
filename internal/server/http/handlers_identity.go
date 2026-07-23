@@ -63,13 +63,6 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	// Existing user adding a device. Requires a valid link signature from one of
 	// their active devices over the new fingerprint.
 	status := "pending"
-	// Admin with no active devices: auto-activate to allow recovery.
-	if existing.IsAdmin {
-		active, _ := s.store.ListActiveDevices(ctx, existing.ID)
-		if len(active) == 0 {
-			status = "active"
-		}
-	}
 	if len(req.LinkSignature) > 0 && req.LinkDeviceFingerprint != "" {
 		signer, signerUser, err := s.store.GetDeviceByFingerprint(ctx, req.LinkDeviceFingerprint)
 		if err != nil || signerUser.ID != existing.ID || signer.Status != "active" {
@@ -97,9 +90,18 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleWhoAmI(w http.ResponseWriter, r *http.Request) {
 	u := userOf(r)
 	d := deviceOf(r)
+	teams, roles, err := s.store.ListTeamsWithRoleForUser(r.Context(), u.ID)
+	if err != nil {
+		teams, roles = nil, nil
+	}
+	teamRoles := make([]protocol.TeamRole, len(teams))
+	for i, t := range teams {
+		teamRoles[i] = protocol.TeamRole{Team: t.Name, Role: roles[i]}
+	}
 	writeJSON(w, http.StatusOK, protocol.WhoAmIResponse{
-		Username: u.Username, Status: u.Status, IsAdmin: u.IsAdmin,
-		Device: protocol.Device{ID: d.ID, Name: d.Name, Fingerprint: d.Fingerprint, Status: d.Status},
+		Username: u.Username, Status: u.Status,
+		Device:    protocol.Device{ID: d.ID, Name: d.Name, Fingerprint: d.Fingerprint, Status: d.Status},
+		TeamRoles: teamRoles,
 	})
 }
 

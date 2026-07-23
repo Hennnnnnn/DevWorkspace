@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"crypto/ed25519"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strconv"
@@ -84,16 +85,38 @@ func (s *Server) activeAuthed(next http.HandlerFunc) http.HandlerFunc {
 	})
 }
 
-// adminAuthed is activeAuthed + requires admin.
-func (s *Server) adminAuthed(next http.HandlerFunc) http.HandlerFunc {
+// teamAdminAuthed is activeAuthed + requires team admin role. The body must
+// contain a "team" field.
+func (s *Server) teamAdminAuthed(next http.HandlerFunc) http.HandlerFunc {
 	return s.activeAuthed(func(w http.ResponseWriter, r *http.Request) {
-		if !userOf(r).IsAdmin {
-			writeErr(w, http.StatusForbidden, "admin only")
+		var body struct {
+			Team string `json:"team"`
+		}
+		if err := json.Unmarshal(bodyOf(r), &body); err != nil || body.Team == "" {
+			writeErr(w, http.StatusBadRequest, "team required")
 			return
 		}
-		next(w, r)
+		t, err := s.store.GetTeamByName(r.Context(), body.Team)
+		if err != nil {
+			writeErr(w, http.StatusNotFound, "team not found")
+			return
+		}
+		ok, err := s.store.IsTeamAdmin(r.Context(), t.ID, userOf(r).ID)
+		if err != nil || !ok {
+			writeErr(w, http.StatusForbidden, "team_admin only")
+			return
+		}
+		// Store resolved team in context for handlers to reuse.
+		ctx := context.WithValue(r.Context(), ctxTeam, t)
+		next(w, r.WithContext(ctx))
 	})
 }
+
+type ctxTeamKey int
+
+const ctxTeam ctxTeamKey = iota + 3 // avoid collision with ctxKey values
+
+func teamOf(r *http.Request) *store.Team { return r.Context().Value(ctxTeam).(*store.Team) }
 
 func userOf(r *http.Request) *store.User     { return r.Context().Value(ctxUser).(*store.User) }
 func deviceOf(r *http.Request) *store.Device { return r.Context().Value(ctxDevice).(*store.Device) }

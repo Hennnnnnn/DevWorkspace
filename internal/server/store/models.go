@@ -6,7 +6,6 @@ type User struct {
 	ID       string
 	Username string
 	Status   string
-	IsAdmin  bool
 }
 
 type Device struct {

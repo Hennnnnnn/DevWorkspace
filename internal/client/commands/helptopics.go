@@ -11,7 +11,7 @@ var helpTopics = map[string]string{
 
   1. devsync init                  generate keypair
   2. devsync register --username x register with server
-  3. devsync bootstrap-admin       become admin (first user only)
+  3. devsync bootstrap-admin       activate account (first user only)
   4. devsync unlock                unlock device key
   5. devsync create-team <name>    create a team
   6. devsync create-vault <name>   create a vault
@@ -23,22 +23,18 @@ Run 'devsync setup' for an interactive walkthrough.`,
 
 	"team": `devsync team — sharing with others
 
-  INVITE (admin adds user to team):
+  INVITE (team admin adds user to team):
     devsync invite <user> --team <team>
 
-  JOIN (user requests access):
-    devsync join <team>
+  JOIN (user claims token):
+    devsync join <token>
 
-  APPROVE (admin activates user):
-    devsync approve <user> --fingerprint <fp>
-
-  GRANT (admin gives vault access):
-    devsync grant <user> --vault <vault>
+  GRANT (team admin gives vault access):
+    devsync grant <user> --vault <vault> --team <team>
 
   Full flow:
-    devsync approve budi --fingerprint SHA256:xxxx
     devsync invite budi --team eng
-    devsync grant budi --vault secrets`,
+    devsync grant budi --vault secrets --team eng`,
 
 	"device": `devsync device — manage devices
 
@@ -47,7 +43,7 @@ Run 'devsync setup' for an interactive walkthrough.`,
 
   ADD a new device (same user):
     1. On new device: devsync init + devsync register --username <you>
-    2. Admin approves: devsync approve <you> --fingerprint <fp>
+    2. Link from trusted device with link signature.
 
   REVOKE a lost device:
     devsync device revoke <device-id>`,

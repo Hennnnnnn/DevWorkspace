@@ -133,7 +133,6 @@ func NewRoot() *cobra.Command {
 		newJoinCmd(),
 		newTeamsCmd(),
 		newMembersCmd(),
-		newApproveCmd(),
 		newCreateVaultCmd(),
 		newGrantCmd(),
 		newRevokeCmd(),

@@ -38,8 +38,7 @@ func newRegisterCmd() *cobra.Command {
 			}
 			fmt.Printf("registered as %q — status: %s\n", res.Username, res.Status)
 			if res.Status == "pending" {
-				fmt.Printf("Ask an admin to approve you:\n  devsync approve %s --fingerprint %s\n",
-					res.Username, res.Fingerprint)
+				fmt.Printf("Ask your team admin for an invite token, then run:\n  devsync teams join <token>\n")
 			}
 			return nil
 		},
@@ -58,12 +57,14 @@ func newWhoAmICmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			admin := ""
-			if resp.IsAdmin {
-				admin = " (admin)"
-			}
-			fmt.Printf("%s%s — status: %s\n", resp.Username, admin, resp.Status)
+			fmt.Printf("%s — status: %s\n", resp.Username, resp.Status)
 			fmt.Printf("device: %s [%s] %s\n", resp.Device.Name, resp.Device.Status, resp.Device.Fingerprint)
+			if len(resp.TeamRoles) > 0 {
+				fmt.Println("team roles:")
+				for _, tr := range resp.TeamRoles {
+					fmt.Printf("  %s: %s\n", tr.Team, tr.Role)
+				}
+			}
 			return nil
 		},
 	}

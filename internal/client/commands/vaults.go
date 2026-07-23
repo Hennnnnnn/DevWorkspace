@@ -30,14 +30,14 @@ func newCreateVaultCmd() *cobra.Command {
 }
 
 func newGrantCmd() *cobra.Command {
-	var vault string
+	var vault, team string
 	cmd := &cobra.Command{
-		Use:   "grant <user> --vault <vault>",
-		Short: "Grant a user access to a vault (admin, re-seals the key)",
+		Use:   "grant <user> --vault <vault> --team <team>",
+		Short: "Grant a user access to a vault (team admin, re-seals the key)",
 		Long:  "Grant an existing user access to a vault.\n\nArguments:\n  <user>  Username of the grantee",
 		Args:  expectArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			if err := actions.Grant(args[0], vault); err != nil {
+			if err := actions.Grant(args[0], vault, team); err != nil {
 				return err
 			}
 			fmt.Printf("granted %s access to vault %q\n", args[0], vault)
@@ -45,19 +45,21 @@ func newGrantCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&vault, "vault", "", "vault name")
+	cmd.Flags().StringVar(&team, "team", "", "team name")
 	_ = cmd.MarkFlagRequired("vault")
+	_ = cmd.MarkFlagRequired("team")
 	return cmd
 }
 
 func newRevokeCmd() *cobra.Command {
-	var vault string
+	var vault, team string
 	cmd := &cobra.Command{
-		Use:   "revoke <user> --vault <vault>",
-		Short: "Revoke a user's vault access and rotate the key (admin)",
+		Use:   "revoke <user> --vault <vault> --team <team>",
+		Short: "Revoke a user's vault access and rotate the key (team admin)",
 		Long:  "Revoke a user's access and rotate the vault key.\n\nArguments:\n  <user>  Username to revoke",
 		Args:  expectArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			res, err := actions.Revoke(args[0], vault)
+			res, err := actions.Revoke(args[0], vault, team)
 			if err != nil {
 				return err
 			}
@@ -68,6 +70,8 @@ func newRevokeCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&vault, "vault", "", "vault name")
+	cmd.Flags().StringVar(&team, "team", "", "team name")
 	_ = cmd.MarkFlagRequired("vault")
+	_ = cmd.MarkFlagRequired("team")
 	return cmd
 }

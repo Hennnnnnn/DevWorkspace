@@ -1,13 +1,12 @@
 -- +goose Up
 -- +goose StatementBegin
 
--- Users. Global identity. status: pending until admin approves.
+-- Users. Global identity. status: pending until active (via invite token or bootstrap first-user).
 CREATE TABLE users (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username    TEXT NOT NULL UNIQUE,
     status      TEXT NOT NULL DEFAULT 'pending'
                     CHECK (status IN ('pending', 'active', 'disabled')),
-    is_admin    BOOLEAN NOT NULL DEFAULT FALSE,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -33,12 +32,14 @@ CREATE TABLE teams (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Team membership. role reserved for future finer roles; admin flag on users for now.
+-- Team membership. role: admin or member within this team. Team admin manages team vaults, invites, etc.
 CREATE TABLE team_members (
     team_id     UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
     user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     status      TEXT NOT NULL DEFAULT 'pending'
                     CHECK (status IN ('pending', 'active')),
+    role        TEXT NOT NULL DEFAULT 'member'
+                    CHECK (role IN ('admin', 'member')),
     joined_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (team_id, user_id)
 );

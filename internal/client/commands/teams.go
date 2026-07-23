@@ -2,7 +2,6 @@ package commands
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -66,21 +65,15 @@ func newCreateTeamCmd() *cobra.Command {
 
 func newJoinCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "join <token-or-team>",
-		Short: "Claim an invite token or request to join a team",
-		Long:  "With a token: auto-approves and adds to team.\nWith a team name: requests join (requires admin approval).\n\nArguments:\n  <token-or-team>  Invite token or team name",
+		Use:   "join <token>",
+		Short: "Claim an invite token to join a team",
+		Long:  "Use an invite token from your team admin to join.\n\nArguments:\n  <token>  Invite token",
 		Args:  expectArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			if err := actions.ClaimInvite(args[0]); err == nil {
-				fmt.Println("invite claimed — you are now an active team member")
-				return nil
-			} else if !strings.Contains(err.Error(), "(404)") {
+			if err := actions.ClaimInvite(args[0]); err != nil {
 				return err
 			}
-			if err := actions.Join(args[0]); err != nil {
-				return err
-			}
-			fmt.Printf("join request sent for %q — pending approval\n", args[0])
+			fmt.Println("invite claimed — you are now an active team member")
 			return nil
 		},
 	}

@@ -46,9 +46,9 @@ func InitDevice(passphrase string) (*InitResult, error) {
 	return &InitResult{Mnemonic: mnemonic, Fingerprint: crypto.Fingerprint(kp.SignPub)}, nil
 }
 
-// BootstrapAdmin promotes the registered user to admin. Only succeeds when no
-// admin exists yet on the server (first user).
-func BootstrapAdmin(passphrase string) error {
+// BootstrapActiveUser activates the registered first user. Only succeeds when no
+// active users exist yet on the server (first user).
+func BootstrapActiveUser(passphrase string) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -64,5 +64,5 @@ func BootstrapAdmin(passphrase string) error {
 		"username":    cfg.Username,
 		"fingerprint": crypto.Fingerprint(kp.SignPub),
 	}
-	return api.PostUnsigned(cfg.ServerURL, "/admin/bootstrap", req, nil)
+	return api.PostUnsigned(cfg.ServerURL, "/bootstrap", req, nil)
 }

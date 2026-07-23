@@ -32,7 +32,7 @@ type wizardInitMsg struct {
 // wizardSetupMsg is the outcome of register→bootstrap→unlock→auto-create.
 type wizardSetupMsg struct {
 	usernameTaken bool
-	isAdmin       bool
+	isActive      bool
 	fingerprint   string
 	err           error
 }
@@ -89,21 +89,21 @@ func doWizardSetup(username, passphrase string) tea.Cmd {
 			}
 			return wizardSetupMsg{err: err}
 		}
-		// Try to become the first admin — failure means we're a teammate.
-		isAdmin := actions.BootstrapAdmin(passphrase) == nil
+		// Try to become the first active user — failure means we're a teammate.
+		isActive := actions.BootstrapActiveUser(passphrase) == nil
 		if err := actions.Unlock(passphrase, unlockTTL); err != nil {
 			return wizardSetupMsg{err: err}
 		}
-		if isAdmin {
+		if isActive {
 			// Auto-create a starter team + vault so push/pull work instantly.
 			if _, err := actions.CreateTeam("personal"); err != nil {
-				return wizardSetupMsg{isAdmin: true, fingerprint: res.Fingerprint, err: err}
+				return wizardSetupMsg{isActive: true, fingerprint: res.Fingerprint, err: err}
 			}
 			if _, err := actions.CreateVault("main", "personal"); err != nil {
-				return wizardSetupMsg{isAdmin: true, fingerprint: res.Fingerprint, err: err}
+				return wizardSetupMsg{isActive: true, fingerprint: res.Fingerprint, err: err}
 			}
 		}
-		return wizardSetupMsg{isAdmin: isAdmin, fingerprint: res.Fingerprint}
+		return wizardSetupMsg{isActive: isActive, fingerprint: res.Fingerprint}
 	}
 }
 
@@ -164,7 +164,7 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.fingerprint != "" {
 			m.fp = msg.fingerprint
 		}
-		if msg.isAdmin {
+		if msg.isActive {
 			return m, func() tea.Msg { return replaceViewMsg{model: newMenuModel(0, 0)} }
 		}
 		return m, func() tea.Msg {

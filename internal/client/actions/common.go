@@ -105,3 +105,15 @@ func sealToDevices(vk crypto.VaultKey, keyVersion int, devices []protocol.Device
 	}
 	return shares, nil
 }
+
+// granteeDevices fetches a user's active devices (box keys) for sealing.
+func granteeDevices(cl *api.Client, username string) ([]protocol.Device, error) {
+	var out protocol.DeviceList
+	if err := cl.Get("/users/devices", urlValues("username", username), &out); err != nil {
+		return nil, err
+	}
+	if len(out.Devices) == 0 {
+		return nil, fmt.Errorf("%s has no active devices", username)
+	}
+	return out.Devices, nil
+}

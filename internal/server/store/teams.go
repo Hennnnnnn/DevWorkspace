@@ -41,19 +41,55 @@ func (s *Store) DeleteTeam(ctx context.Context, name string) error {
 }
 
 // AddTeamMember inserts (or no-ops) a membership row.
-func (s *Store) AddTeamMember(ctx context.Context, teamID, userID, status string) error {
+func (s *Store) AddTeamMember(ctx context.Context, teamID, userID, status, role string) error {
 	_, err := s.db.ExecContext(ctx, s.rebind(
-		`INSERT INTO team_members (team_id, user_id, status) VALUES (?,?,?)
-		 ON CONFLICT (team_id, user_id) DO UPDATE SET status=EXCLUDED.status`),
-		teamID, userID, status)
+		`INSERT INTO team_members (team_id, user_id, status, role) VALUES (?,?,?,?)
+		 ON CONFLICT (team_id, user_id) DO UPDATE SET status=EXCLUDED.status, role=EXCLUDED.role`),
+		teamID, userID, status, role)
 	return err
 }
 
-// ActivatePendingMemberships flips a user's pending team memberships to active
-// (on device/user approval).
-func (s *Store) ActivatePendingMemberships(ctx context.Context, userID string) error {
+// ListTeamsWithRoleForUser returns teams the user belongs to with their role.
+func (s *Store) ListTeamsWithRoleForUser(ctx context.Context, userID string) ([]Team, []string, error) {
+	rows, err := s.db.QueryContext(ctx, s.rebind(
+		`SELECT t.id, t.name, `+creatorSubquery+`, m.role FROM teams t
+		 JOIN team_members m ON m.team_id = t.id
+		 WHERE m.user_id=? AND m.status='active'
+		 ORDER BY t.name`), userID)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	var teams []Team
+	var roles []string
+	for rows.Next() {
+		var t Team
+		var role string
+		if err := rows.Scan(&t.ID, &t.Name, &t.CreatedBy, &role); err != nil {
+			return nil, nil, err
+		}
+		teams = append(teams, t)
+		roles = append(roles, role)
+	}
+	return teams, roles, rows.Err()
+}
+
+// IsTeamAdmin checks if a user is an active admin of the given team.
+func (s *Store) IsTeamAdmin(ctx context.Context, teamID, userID string) (bool, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, s.rebind(
+		`SELECT 1 FROM team_members WHERE team_id=? AND user_id=? AND role='admin' AND status='active'`),
+		teamID, userID).Scan(&n)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+// SetTeamMemberRole updates a team member's role.
+func (s *Store) SetTeamMemberRole(ctx context.Context, teamID, userID, role string) error {
 	_, err := s.db.ExecContext(ctx, s.rebind(
-		`UPDATE team_members SET status='active' WHERE user_id=? AND status='pending'`), userID)
+		`UPDATE team_members SET role=? WHERE team_id=? AND user_id=?`), role, teamID, userID)
 	return err
 }
 
@@ -107,7 +143,7 @@ func (s *Store) ListTeamsForUser(ctx context.Context, userID, status string) ([]
 
 // ListMembers returns members of a team; pendingOnly filters to pending status.
 func (s *Store) ListMembers(ctx context.Context, teamID string, pendingOnly bool) ([]Member, error) {
-	q := `SELECT u.username, m.status, d.fingerprint, d.id, d.box_public_key
+	q := `SELECT u.username, m.status, m.role, d.fingerprint, d.id, d.box_public_key
 	      FROM team_members m
 	      JOIN users u ON u.id = m.user_id
 	      LEFT JOIN devices d ON d.user_id = u.id
@@ -126,7 +162,7 @@ func (s *Store) ListMembers(ctx context.Context, teamID string, pendingOnly bool
 		var m Member
 		var fp, did *string
 		var box []byte
-		if err := rows.Scan(&m.Username, &m.Status, &fp, &did, &box); err != nil {
+		if err := rows.Scan(&m.Username, &m.Status, &m.Role, &fp, &did, &box); err != nil {
 			return nil, err
 		}
 		if fp != nil {
@@ -145,6 +181,7 @@ func (s *Store) ListMembers(ctx context.Context, teamID string, pendingOnly bool
 type Member struct {
 	Username    string
 	Status      string
+	Role        string
 	Fingerprint string
 	DeviceID    string
 	BoxPubKey   []byte

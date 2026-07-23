@@ -21,8 +21,7 @@ import (
 	"github.com/Hennnnnnn/DevWorkspace/internal/server/store"
 )
 
-// End-to-end test. Runs on a fresh SQLite file by default (no external DB).
-// Set DEVSYNC_TEST_DATABASE_URL to a postgres:// DSN to run against Postgres too.
+// End-to-end test with team-scoped roles (no global admin).
 func TestFullLifecycle(t *testing.T) {
 	driver, dsn := "sqlite", ""
 	if pg := os.Getenv("DEVSYNC_TEST_DATABASE_URL"); pg != "" {
@@ -44,42 +43,47 @@ func TestFullLifecycle(t *testing.T) {
 	ts := httptest.NewServer(srvhttp.New(st).Handler())
 	defer ts.Close()
 
-	// --- admin registers ---
-	admin := newTestDevice(t)
-	registerDevice(t, ts.URL, "alice", admin)
-	// Bootstrap admin directly (simulating server CLI).
-	adminUser, err := st.GetUserByUsername(ctx, "alice")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = st.SetUserStatus(ctx, adminUser.ID, "active")
-	devs, _ := st.ListDevices(ctx, adminUser.ID)
+	// --- alice registers + bootstraps active (no admin) ---
+	alice := newTestDevice(t)
+	registerDevice(t, ts.URL, "alice", alice)
+	aliceUser, _ := st.GetUserByUsername(ctx, "alice")
+	_ = st.SetUserStatus(ctx, aliceUser.ID, "active")
+	devs, _ := st.ListDevices(ctx, aliceUser.ID)
 	_ = st.SetDeviceStatus(ctx, devs[0].ID, "active")
-	_ = st.SetUserAdmin(ctx, adminUser.ID, true)
 
-	// whoami works and shows admin+active.
+	// whoami — status active, no team roles yet.
 	var who protocol.WhoAmIResponse
-	admin.get(t, ts.URL, "alice", "/whoami", nil, &who)
-	if !who.IsAdmin || who.Status != "active" {
-		t.Fatalf("expected active admin, got %+v", who)
+	alice.get(t, ts.URL, "alice", "/whoami", nil, &who)
+	if who.Status != "active" || len(who.TeamRoles) != 0 {
+		t.Fatalf("expected active with no team roles, got %+v", who)
 	}
 
-	// --- create team + vault ---
-	admin.post(t, ts.URL, "alice", "/admin/create-team", protocol.CreateTeamRequest{Name: "eng"}, nil)
+	// --- create team → alice auto team_admin ---
+	var team protocol.Team
+	alice.post(t, ts.URL, "alice", "/teams/create", protocol.CreateTeamRequest{Team: "eng"}, &team)
+	if team.Name != "eng" || team.Creator != "alice" {
+		t.Fatalf("bad team: %+v", team)
+	}
 
+	// whoami now shows team role.
+	alice.get(t, ts.URL, "alice", "/whoami", nil, &who)
+	if len(who.TeamRoles) != 1 || who.TeamRoles[0].Team != "eng" || who.TeamRoles[0].Role != "admin" {
+		t.Fatalf("expected team_roles [{eng admin}], got %+v", who.TeamRoles)
+	}
+
+	// --- create vault as team_admin ---
 	vk, _ := crypto.NewVaultKey()
-	adminDev := devs[0]
-	sealed, _ := crypto.SealVaultKey(vk, boxKey(adminDev.BoxPubKey))
-	admin.post(t, ts.URL, "alice", "/admin/create-vault", protocol.CreateVaultRequest{
+	sealed, _ := crypto.SealVaultKey(vk, boxKey(devs[0].BoxPubKey))
+	alice.post(t, ts.URL, "alice", "/teams/vaults/create", protocol.CreateVaultRequest{
 		Team: "eng", Name: "secrets",
-		Shares: []protocol.VaultKeyShare{{DeviceID: adminDev.ID, KeyVersion: 1, EncryptedKey: sealed}},
+		Shares: []protocol.VaultKeyShare{{DeviceID: devs[0].ID, KeyVersion: 1, EncryptedKey: sealed}},
 	}, nil)
 
 	// --- push a file ---
 	plain := []byte("API_KEY=super-secret")
 	ct, _ := crypto.EncryptBlob(vk, plain)
 	var push protocol.PushResponse
-	admin.post(t, ts.URL, "alice", "/files/push", protocol.PushRequest{
+	alice.post(t, ts.URL, "alice", "/files/push", protocol.PushRequest{
 		Vault: "secrets",
 		File:  protocol.FilePush{Path: ".env", KeyVersion: 1, Ciphertext: ct, BaseVersion: 0},
 	}, &push)
@@ -88,7 +92,7 @@ func TestFullLifecycle(t *testing.T) {
 	}
 
 	// Stale push rejected.
-	code := admin.postRaw(t, ts.URL, "alice", "/files/push", protocol.PushRequest{
+	code := alice.postRaw(t, ts.URL, "alice", "/files/push", protocol.PushRequest{
 		Vault: "secrets",
 		File:  protocol.FilePush{Path: ".env", KeyVersion: 1, Ciphertext: ct, BaseVersion: 0},
 	})
@@ -98,26 +102,84 @@ func TestFullLifecycle(t *testing.T) {
 
 	// --- pull + decrypt ---
 	var pull protocol.PullResponse
-	admin.get(t, ts.URL, "alice", "/files/pull", map[string]string{"vault": "secrets", "path": ".env"}, &pull)
+	alice.get(t, ts.URL, "alice", "/files/pull", map[string]string{"vault": "secrets", "path": ".env"}, &pull)
 	got, err := crypto.DecryptBlob(vk, pull.Ciphertext)
 	if err != nil || !bytes.Equal(got, plain) {
 		t.Fatalf("pull/decrypt mismatch: %v", err)
 	}
 
+	// --- invite budi ---
+	var inviteResp protocol.InviteTokenResponse
+	alice.post(t, ts.URL, "alice", "/teams/invite", protocol.InviteRequest{Team: "eng", Username: "budi"}, &inviteResp)
+	if inviteResp.Token == "" {
+		t.Fatal("expected invite token")
+	}
+
+	// --- budi registers + claims invite → active + member ---
+	budi := newTestDevice(t)
+	registerDevice(t, ts.URL, "budi", budi)
+	budi.post(t, ts.URL, "budi", "/teams/claim", protocol.ClaimInviteRequest{Token: inviteResp.Token}, nil)
+
+	// budi whoami → active, TeamRoles has {eng, member}
+	budi.get(t, ts.URL, "budi", "/whoami", nil, &who)
+	if who.Status != "active" {
+		t.Fatalf("budi not active: %+v", who)
+	}
+	if len(who.TeamRoles) != 1 || who.TeamRoles[0].Team != "eng" || who.TeamRoles[0].Role != "member" {
+		t.Fatalf("budi team roles: %+v", who.TeamRoles)
+	}
+
+	// --- alice grants budi vault access ---
+	// budi needs an active device for sealing.
+	budiUser, _ := st.GetUserByUsername(ctx, "budi")
+	budiDevs, _ := st.ListDevices(ctx, budiUser.ID)
+	sealedForBudi, _ := crypto.SealVaultKey(vk, boxKey(budiDevs[0].BoxPubKey))
+	alice.post(t, ts.URL, "alice", "/teams/vaults/grant", protocol.GrantRequest{
+		Team: "eng", Vault: "secrets", Username: "budi",
+		Shares: []protocol.VaultKeyShare{{DeviceID: budiDevs[0].ID, KeyVersion: 1, EncryptedKey: sealedForBudi}},
+	}, nil)
+
+	// --- budi pulls file ---
+	budi.get(t, ts.URL, "budi", "/files/pull", map[string]string{"vault": "secrets", "path": ".env"}, &pull)
+	got, err = crypto.DecryptBlob(vk, pull.Ciphertext)
+	if err != nil || !bytes.Equal(got, plain) {
+		t.Fatalf("budi pull/decrypt mismatch: %v", err)
+	}
+
+	// --- team_admin check: non-admin member tries grant → 403 ---
+	code = budi.postRaw(t, ts.URL, "budi", "/teams/vaults/grant", protocol.GrantRequest{
+		Team: "eng", Vault: "secrets", Username: "alice",
+	})
+	if code != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-admin grant, got %d", code)
+	}
+
+	// --- bootstrap fails when active users exist ---
+	bootstrapReq := map[string]string{"username": "budi", "fingerprint": budi.fp}
+	body, _ := json.Marshal(bootstrapReq)
+	resp, err := http.Post(ts.URL+"/bootstrap", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("bootstrap request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403 on second bootstrap, got %d", resp.StatusCode)
+	}
+
 	// --- anti-replay: old timestamp rejected ---
-	code = admin.getRawTS(t, ts.URL, "alice", "/whoami", time.Now().Unix()-1000)
+	code = alice.getRawTS(t, ts.URL, "alice", "/whoami", time.Now().Unix()-1000)
 	if code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on stale timestamp, got %d", code)
 	}
 
 	// --- bad signature rejected ---
 	other := newTestDevice(t)
-	code = other.getRawAs(t, ts.URL, "alice", admin.fp, "/whoami")
+	code = other.getRawAs(t, ts.URL, "alice", alice.fp, "/whoami")
 	if code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on wrong-key signature, got %d", code)
 	}
 
-	t.Log("full lifecycle passed")
+	t.Log("full lifecycle passed — team-scoped roles")
 }
 
 // --- test device helper ---
@@ -293,13 +355,12 @@ func TestAuthMiddleware(t *testing.T) {
 	ts := httptest.NewServer(srvhttp.New(st).Handler())
 	defer ts.Close()
 
-	admin := newTestDevice(t)
-	registerDevice(t, ts.URL, "alice", admin)
-	adminUser, _ := st.GetUserByUsername(ctx, "alice")
-	_ = st.SetUserStatus(ctx, adminUser.ID, "active")
-	devs, _ := st.ListDevices(ctx, adminUser.ID)
-	_ = st.SetDeviceStatus(ctx, devs[0].ID, "active")
-	_ = st.SetUserAdmin(ctx, adminUser.ID, true)
+	alice := newTestDevice(t)
+	registerDevice(t, ts.URL, "alice", alice)
+	aliceUser, _ := st.GetUserByUsername(ctx, "alice")
+	_ = st.SetUserStatus(ctx, aliceUser.ID, "active")
+	aliceDevs, _ := st.ListDevices(ctx, aliceUser.ID)
+	_ = st.SetDeviceStatus(ctx, aliceDevs[0].ID, "active")
 
 	// Test 1: missing auth headers
 	resp, _ := http.Get(ts.URL + "/whoami")
@@ -309,7 +370,7 @@ func TestAuthMiddleware(t *testing.T) {
 
 	// Test 2: bad timestamp format
 	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/whoami", nil)
-	req.Header.Set(protocol.HeaderDevice, admin.fp)
+	req.Header.Set(protocol.HeaderDevice, alice.fp)
 	req.Header.Set(protocol.HeaderTimestamp, "not-a-number")
 	req.Header.Set(protocol.HeaderSignature, "AA==")
 	resp, _ = http.DefaultClient.Do(req)
@@ -329,7 +390,7 @@ func TestAuthMiddleware(t *testing.T) {
 
 	// Test 4: invalid signature base64
 	req, _ = http.NewRequest(http.MethodGet, ts.URL+"/whoami", nil)
-	req.Header.Set(protocol.HeaderDevice, admin.fp)
+	req.Header.Set(protocol.HeaderDevice, alice.fp)
 	req.Header.Set(protocol.HeaderTimestamp, strconv.FormatInt(time.Now().Unix(), 10))
 	req.Header.Set(protocol.HeaderSignature, "!!!bad-base64!!!")
 	resp, _ = http.DefaultClient.Do(req)
@@ -338,31 +399,19 @@ func TestAuthMiddleware(t *testing.T) {
 	}
 
 	// Test 5: anti-replay — timestamp too old
-	code := admin.getRawTS(t, ts.URL, "alice", "/whoami", time.Now().Unix()-1000)
+	code := alice.getRawTS(t, ts.URL, "alice", "/whoami", time.Now().Unix()-1000)
 	if code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 for stale timestamp, got %d", code)
 	}
 
 	// Test 6: anti-replay — timestamp too new
-	code = admin.getRawTS(t, ts.URL, "alice", "/whoami", time.Now().Unix()+1000)
+	code = alice.getRawTS(t, ts.URL, "alice", "/whoami", time.Now().Unix()+1000)
 	if code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 for future timestamp, got %d", code)
 	}
 
-	// Test 7: non-admin hitting admin endpoint
-	nonAdmin := newTestDevice(t)
-	registerDevice(t, ts.URL, "bob", nonAdmin)
-	bobUser, _ := st.GetUserByUsername(ctx, "bob")
-	_ = st.SetUserStatus(ctx, bobUser.ID, "active")
-	bobDevs, _ := st.ListDevices(ctx, bobUser.ID)
-	_ = st.SetDeviceStatus(ctx, bobDevs[0].ID, "active")
-	code = nonAdmin.postRaw(t, ts.URL, "bob", "/admin/create-team", protocol.CreateTeamRequest{Name: "should-fail"})
-	if code != http.StatusForbidden {
-		t.Fatalf("expected 403 for non-admin on admin endpoint, got %d", code)
-	}
-
-	// Test 8: timestamp right at boundary — within skew should pass
-	code = admin.getRawTS(t, ts.URL, "alice", "/whoami", time.Now().Unix())
+	// Test 7: timestamp right at boundary — within skew should pass
+	code = alice.getRawTS(t, ts.URL, "alice", "/whoami", time.Now().Unix())
 	if code != http.StatusOK {
 		t.Fatalf("expected 200 for current timestamp, got %d", code)
 	}

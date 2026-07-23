@@ -40,16 +40,21 @@ type DeviceList struct {
 }
 
 type WhoAmIResponse struct {
-	Username string `json:"username"`
-	Status   string `json:"status"`
-	IsAdmin  bool   `json:"is_admin"`
-	Device   Device `json:"device"`
+	Username  string     `json:"username"`
+	Status    string     `json:"status"`
+	Device    Device     `json:"device"`
+	TeamRoles []TeamRole `json:"team_roles"`
+}
+
+type TeamRole struct {
+	Team string `json:"team"`
+	Role string `json:"role"`
 }
 
 // --- teams / members ---
 
 type CreateTeamRequest struct {
-	Name string `json:"name"`
+	Team string `json:"team"`
 }
 
 type Team struct {
@@ -65,6 +70,7 @@ type TeamList struct {
 type Member struct {
 	Username    string `json:"username"`
 	Status      string `json:"status"`
+	Role        string `json:"role"`
 	Fingerprint string `json:"fingerprint"`
 	DeviceID    string `json:"device_id"`
 	BoxPubKey   []byte `json:"box_pub_key,omitempty"`
@@ -74,16 +80,9 @@ type MemberList struct {
 	Members []Member `json:"members"`
 }
 
-type ApproveRequest struct {
-	Username    string `json:"username"`
-	Fingerprint string `json:"fingerprint"`
-	// Vault key shares the admin re-encrypts to the approved user's device.
-	Shares []VaultKeyShare `json:"shares,omitempty"`
-}
-
 type InviteRequest struct {
 	Username string `json:"username"`
-	TeamName string `json:"team_name"`
+	Team     string `json:"team"`
 }
 
 type InviteTokenResponse struct {
@@ -124,6 +123,7 @@ type VaultKeyShare struct {
 
 type GrantRequest struct {
 	Username string `json:"username"`
+	Team     string `json:"team"`
 	Vault    string `json:"vault"`
 	// Sealed vault key shares for each of the grantee's active devices.
 	Shares []VaultKeyShare `json:"shares"`
@@ -132,6 +132,7 @@ type GrantRequest struct {
 type RevokeRequest struct {
 	Username string `json:"username,omitempty"`
 	DeviceID string `json:"device_id,omitempty"`
+	Team     string `json:"team,omitempty"`
 	Vault    string `json:"vault,omitempty"`
 	// After a revoke the caller rotates: new key version sealed to survivors.
 	NewKeyVersion int             `json:"new_key_version,omitempty"`

@@ -82,9 +82,8 @@ func runServe() {
 	}
 }
 
-// runCreateAdmin bootstraps the first admin from server-side shell access.
-// Reads the user's device registration data from stdin flags: it activates an
-// existing pending user+device and flags them admin. Zero race window: requires
+// runCreateAdmin bootstraps the first active user from server-side shell access.
+// Activates an existing pending user+device. Zero race window: requires
 // shell on the server. Usage: devsync-server create-admin <username> <fingerprint>
 func runCreateAdmin(args []string) {
 	if len(args) < 2 {
@@ -112,8 +111,5 @@ func runCreateAdmin(args []string) {
 	if err := st.SetDeviceStatus(ctx, device.ID, "active"); err != nil {
 		log.Fatalf("activate device: %v", err)
 	}
-	if err := st.SetUserAdmin(ctx, user.ID, true); err != nil {
-		log.Fatalf("set admin: %v", err)
-	}
-	fmt.Printf("admin %q activated (device %s)\n", username, base64.RawStdEncoding.EncodeToString([]byte(device.ID))[:8])
+	fmt.Printf("user %q activated (device %s)\n", username, base64.RawStdEncoding.EncodeToString([]byte(device.ID))[:8])
 }

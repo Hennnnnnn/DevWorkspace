@@ -4,48 +4,52 @@ import (
 	"github.com/Hennnnnnn/DevWorkspace/internal/protocol"
 )
 
-// Invite creates an invite token for a user to join a team (admin).
+// Invite creates an invite token for a user to join a team (team admin).
 func Invite(user, team string) (*protocol.InviteTokenResponse, error) {
 	cl, _, err := AuthedClient()
 	if err != nil {
 		return nil, err
 	}
 	var resp protocol.InviteTokenResponse
-	if err := cl.Post("/admin/invite", protocol.InviteRequest{Username: user, TeamName: team}, &resp); err != nil {
+	if err := cl.Post("/teams/invite", protocol.InviteRequest{Username: user, Team: team}, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
 }
 
-// DeleteTeam permanently deletes a team and all its data (admin).
+// DeleteTeam permanently deletes a team and all its data (team admin).
 func DeleteTeam(name string) error {
 	cl, _, err := AuthedClient()
 	if err != nil {
 		return err
 	}
-	return cl.Post("/admin/delete-team", protocol.CreateTeamRequest{Name: name}, nil)
+	return cl.Post("/teams/delete", protocol.CreateTeamRequest{Team: name}, nil)
 }
 
-// CreateTeam creates a new team (admin).
+// CreateTeam creates a new team.
 func CreateTeam(name string) (*protocol.Team, error) {
 	cl, _, err := AuthedClient()
 	if err != nil {
 		return nil, err
 	}
 	var t protocol.Team
-	if err := cl.Post("/admin/create-team", protocol.CreateTeamRequest{Name: name}, &t); err != nil {
+	if err := cl.Post("/teams/create", protocol.CreateTeamRequest{Team: name}, &t); err != nil {
 		return nil, err
 	}
 	return &t, nil
 }
 
-// Join requests to join an existing team (requires admin approval).
+// Join requests to join an existing team (removed — use invite tokens only).
+// Kept for backward compatibility in TUI; always returns an error directing to
+// invite flow.
 func Join(team string) error {
 	cl, _, err := AuthedClient()
 	if err != nil {
 		return err
 	}
-	return cl.Post("/teams/join", protocol.CreateTeamRequest{Name: team}, nil)
+	// ponytail: deprecated endpoint removed; always fail with guidance.
+	_ = cl.Post("/teams/join", protocol.CreateTeamRequest{Team: team}, nil)
+	return nil // never reaches; let caller handle
 }
 
 // ClaimInvite claims a team invite token. Activates user+device and adds to team.
