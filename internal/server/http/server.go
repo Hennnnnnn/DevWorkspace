@@ -29,22 +29,27 @@ func (s *Server) Handler() http.Handler {
 	// Authenticated (signature required; pending devices allowed for whoami).
 	mux.HandleFunc("GET /whoami", s.authed(s.handleWhoAmI))
 
-	// Active user required.
-	mux.HandleFunc("GET /teams", s.activeAuthed(s.handleTeams))
+	// Authenticated only — general feature access (RFC §1: device activation no
+	// longer a prerequisite). Pending devices can still reach link/invite flows.
+	mux.HandleFunc("GET /teams", s.authed(s.handleTeams))
 	mux.HandleFunc("POST /teams/claim", s.authed(s.handleClaimInvite))
-	mux.HandleFunc("GET /teams/members", s.activeAuthed(s.handleMembers))
-	mux.HandleFunc("GET /vaults", s.activeAuthed(s.handleVaults))
+	mux.HandleFunc("GET /teams/members", s.authed(s.handleMembers))
+	mux.HandleFunc("GET /vaults", s.authed(s.handleVaults))
+	mux.HandleFunc("GET /files", s.authed(s.handleListFiles))
+	mux.HandleFunc("GET /files/history", s.authed(s.handleHistory))
+	mux.HandleFunc("GET /devices", s.authed(s.handleListDevices))
+	mux.HandleFunc("GET /users/devices", s.authed(s.handleUserDevices))
+	mux.HandleFunc("POST /devices/link", s.authed(s.handleLinkDevice))
+	mux.HandleFunc("GET /audit", s.authed(s.handleAudit))
+
+	// Vault-unlock sensitive (RFC §3). Server can't observe client agent unlock
+	// state, so equivalent mechanism = trusted-device gate: only active devices
+	// receive sealed vault keys from an admin. These expose sealed keys/ciphertext.
 	mux.HandleFunc("GET /vaults/keyshares", s.activeAuthed(s.handleKeyShares))
 	mux.HandleFunc("POST /files/push", s.activeAuthed(s.handlePush))
-	mux.HandleFunc("GET /files", s.activeAuthed(s.handleListFiles))
 	mux.HandleFunc("GET /files/pull", s.activeAuthed(s.handlePull))
-	mux.HandleFunc("GET /files/history", s.activeAuthed(s.handleHistory))
-	mux.HandleFunc("GET /devices", s.activeAuthed(s.handleListDevices))
-	mux.HandleFunc("GET /users/devices", s.activeAuthed(s.handleUserDevices))
-	mux.HandleFunc("POST /devices/link", s.activeAuthed(s.handleLinkDevice))
-	mux.HandleFunc("GET /audit", s.activeAuthed(s.handleAudit))
 
-	// Team admin only.
+	// Team admin only (admin must be a trusted/active device).
 	mux.HandleFunc("POST /teams/create", s.activeAuthed(s.handleCreateTeam))
 	mux.HandleFunc("POST /teams/delete", s.teamAdminAuthed(s.handleDeleteTeam))
 	mux.HandleFunc("POST /teams/vaults/create", s.teamAdminAuthed(s.handleCreateVault))

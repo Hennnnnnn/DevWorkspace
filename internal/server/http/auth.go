@@ -68,10 +68,12 @@ func (s *Server) authed(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// activeAuthed is authed + requires the device to be active. User activation is
-// gone (room-based ownership: every authenticated user is usable immediately),
-// so only the device state is gated here — a revoked or unsigned device stays
-// blocked.
+// activeAuthed is authed + requires the device to be active. Acts as the
+// server-side vault-unlock gate (RFC §3, "or equivalent mechanism"): the server
+// can't observe the client agent's unlock state, but only an active/trusted
+// device receives sealed vault keys from an admin, so sensitive endpoints
+// (keyshares, file I/O) require it. General feature routes use plain authed
+// (RFC §1) — device activation is no longer a prerequisite for using the app.
 func (s *Server) activeAuthed(next http.HandlerFunc) http.HandlerFunc {
 	return s.authed(func(w http.ResponseWriter, r *http.Request) {
 		if deviceOf(r).Status != "active" {
